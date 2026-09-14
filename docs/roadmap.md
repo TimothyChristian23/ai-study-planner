@@ -14,6 +14,8 @@
 - [x] Generate adaptive study sessions from weak topics and exam timing
 - [x] Add assignment, quiz, project, and exam deadline tracking
 - [x] Blend urgent deadlines into generated study sessions
+- [x] Generate source-backed quiz cards from indexed material text
+- [x] Add answer reveal with material source attribution
 
 ## Phase 2: Functional MVP
 

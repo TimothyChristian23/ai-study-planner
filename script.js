@@ -6,6 +6,7 @@ const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 
 let pdfjsLoadingPromise;
+let quizAnswerVisible = false;
 
 const topicPatterns = [
   { name: "Graph traversal", terms: ["graph", "bfs", "dfs", "traversal", "shortest path"] },
@@ -498,24 +499,86 @@ function buildTopics() {
   return getTopicStats().slice(0, 5);
 }
 
-function buildQuestions() {
-  const questions = state.materials.slice(0, 8).map((material) => {
-    const topic = material.topics[0] || material.type;
+function normalizeWhitespace(value) {
+  return value.replace(/\s+/g, " ").trim();
+}
 
+function splitIntoSentences(text) {
+  return normalizeWhitespace(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 60 && sentence.length <= 260);
+}
+
+function scoreSentence(sentence, material) {
+  const lowerSentence = sentence.toLowerCase();
+  const topicHits = material.topics.reduce((total, topic) => {
+    const pattern = topicPatterns.find((item) => item.name === topic);
+    const hits = pattern?.terms.filter((term) => lowerSentence.includes(term)).length || 0;
+
+    return total + hits;
+  }, 0);
+  const studyWordHits = ["because", "therefore", "used", "preferred", "important", "requires", "compare"].filter(
+    (term) => lowerSentence.includes(term),
+  ).length;
+
+  return topicHits * 3 + studyWordHits + Math.min(sentence.length / 90, 2);
+}
+
+function createQuestionFromSentence(sentence, material) {
+  const topic = material.topics[0] || material.type;
+  const pattern = topicPatterns.find((item) => item.name === topic);
+  const lowerSentence = sentence.toLowerCase();
+  const matchedTerm = pattern?.terms.find((term) => lowerSentence.includes(term));
+  const prompt = matchedTerm
+    ? `Explain how "${matchedTerm}" is used in this source.`
+    : `What is the key idea in this passage from ${material.name}?`;
+
+  return {
+    topic,
+    question: prompt,
+    answer: sentence,
+    source: material.name,
+  };
+}
+
+function buildQuestions() {
+  const sourceBackedQuestions = state.materials
+    .filter((material) => material.text)
+    .flatMap((material) =>
+      splitIntoSentences(material.text)
+        .sort((a, b) => scoreSentence(b, material) - scoreSentence(a, material))
+        .slice(0, 3)
+        .map((sentence) => createQuestionFromSentence(sentence, material)),
+    )
+    .slice(0, 12);
+
+  if (sourceBackedQuestions.length) {
+    return sourceBackedQuestions;
+  }
+
+  const materialQuestions = state.materials.slice(0, 8).map((material) => {
+    const topic = material.topics[0] || material.type;
     return {
       topic,
       question: `From ${material.name}, what are the three ideas you should be able to explain without looking?`,
+      answer: material.text
+        ? normalizeWhitespace(material.text).slice(0, 260)
+        : "This material has been saved, but it does not have searchable text yet. Use the file name and topic tags as the review anchor.",
+      source: material.name,
     };
   });
 
-  if (questions.length) {
-    return questions;
+  if (materialQuestions.length) {
+    return materialQuestions;
   }
 
   return [
     {
       topic: "Materials",
       question: "Upload a syllabus or notes file to generate the first active-recall question.",
+      answer: "Add course materials first. Text files and PDFs with extractable text can become source-backed quiz cards.",
+      source: "No source yet",
     },
   ];
 }
@@ -632,9 +695,14 @@ function renderQuestion() {
   const questions = buildQuestions();
   state.questionIndex %= questions.length;
   const current = questions[state.questionIndex];
+  const answer = document.querySelector("#quizAnswer");
 
   document.querySelector("#quizTopic").textContent = current.topic;
   document.querySelector("#quizQuestion").textContent = current.question;
+  document.querySelector("#quizSource").textContent = `Source: ${current.source}`;
+  answer.textContent = current.answer;
+  answer.hidden = !quizAnswerVisible;
+  document.querySelector("#showAnswer").textContent = quizAnswerVisible ? "Hide answer" : "Show answer";
   document.querySelector("#quizItemCount").textContent = questions.length;
 }
 
@@ -867,8 +935,15 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
 
 document.querySelector("#nextQuestion").addEventListener("click", () => {
   state.questionIndex += 1;
+  quizAnswerVisible = false;
+  document.querySelector("#quizFeedback").textContent = "";
   renderQuestion();
   saveState();
+});
+
+document.querySelector("#showAnswer").addEventListener("click", () => {
+  quizAnswerVisible = !quizAnswerVisible;
+  renderQuestion();
 });
 
 document.querySelector(".answer-row").addEventListener("click", (event) => {
@@ -888,12 +963,13 @@ document.querySelector(".answer-row").addEventListener("click", (event) => {
   progress.confidence = Math.max(5, Math.min(100, progress.confidence + (wasHit ? 9 : -14)));
   progress.lastReviewedAt = new Date().toISOString();
   state.questionIndex += 1;
+  quizAnswerVisible = false;
+
+  renderAll();
 
   document.querySelector("#quizFeedback").textContent = wasHit
     ? `${current.topic} moved up to ${Math.round(progress.confidence)}% confidence.`
     : `${current.topic} dropped to ${Math.round(progress.confidence)}%, so it moved higher in the plan.`;
-
-  renderAll();
 });
 
 document.querySelector("#generatePlan").addEventListener("click", () => {

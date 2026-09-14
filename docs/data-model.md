@@ -128,6 +128,8 @@ This document captures the local data shape used by the static prototype and the
 - `topic`
 - `question`
 - `answer`
+- `source_material_name`
+- `source_excerpt`
 - `created_at`
 
 ### topic_progress
