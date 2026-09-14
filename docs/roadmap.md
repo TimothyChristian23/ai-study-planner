@@ -10,13 +10,15 @@
 - [x] Index basic text files for first-pass material-grounded answers
 - [x] Extract searchable text from uploaded PDFs in the browser
 - [x] Document the prototype and MVP data models
+- [x] Track quiz feedback by topic in local storage
+- [x] Generate adaptive study sessions from weak topics and exam timing
 
 ## Phase 2: Functional MVP
 
 - Add authentication
 - Store courses, exam dates, assignments, and study sessions
 - Parse uploaded PDFs and text files
-- Generate schedules from deadlines and available study time
+- Persist generated schedules from deadlines and available study time
 
 ## Phase 3: AI Study Engine
 

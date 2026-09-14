@@ -58,6 +58,7 @@ const defaultState = {
   },
   materials: sampleMaterials,
   schedule: [],
+  topicProgress: {},
   questionIndex: 0,
 };
 
@@ -79,6 +80,7 @@ function loadState() {
       topics: material.topics?.length ? material.topics : inferTopics(`${material.name} ${material.text || ""}`),
       text: material.text || "",
     }));
+    merged.topicProgress = merged.topicProgress || {};
 
     return merged;
   } catch {
@@ -134,6 +136,34 @@ function formatDate(dateValue) {
   });
 }
 
+function formatSessionDate(date) {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function parseExamDate() {
+  if (!state.course.examDate) {
+    return null;
+  }
+
+  return new Date(`${state.course.examDate}T09:00:00`);
+}
+
+function getDaysUntilExam() {
+  const examDate = parseExamDate();
+
+  if (!examDate) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((examDate - today) / 86400000);
+}
+
 function inferType(fileName) {
   const lower = fileName.toLowerCase();
 
@@ -164,6 +194,81 @@ function inferTopics(text) {
     .map((topic) => topic.name);
 
   return matchedTopics.length ? matchedTopics : ["General review"];
+}
+
+function collectTopicCounts() {
+  const topicCounts = new Map();
+
+  state.materials.forEach((material) => {
+    material.topics.forEach((topic) => {
+      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
+    });
+  });
+
+  return topicCounts;
+}
+
+function getInitialConfidence(topic, count) {
+  const knownTopicPenalty = topic === "General review" ? 8 : 0;
+
+  return Math.max(35, 72 - count * 6 - knownTopicPenalty);
+}
+
+function ensureTopicProgress(topic, count = 1) {
+  state.topicProgress ||= {};
+
+  if (!state.topicProgress[topic]) {
+    state.topicProgress[topic] = {
+      confidence: getInitialConfidence(topic, count),
+      attempts: 0,
+      misses: 0,
+      lastReviewedAt: null,
+    };
+  }
+
+  return state.topicProgress[topic];
+}
+
+function getTopicStats() {
+  const topicCounts = collectTopicCounts();
+
+  if (!topicCounts.size) {
+    return [
+      {
+        name: "Upload materials",
+        count: 0,
+        score: 30,
+        priority: "Start",
+        attempts: 0,
+        misses: 0,
+      },
+    ];
+  }
+
+  return [...topicCounts.entries()]
+    .map(([name, count]) => {
+      const progress = ensureTopicProgress(name, count);
+      const score = Math.round(progress.confidence);
+
+      return {
+        name,
+        count,
+        score,
+        priority: score < 48 ? "High" : score < 70 ? "Medium" : "Watch",
+        attempts: progress.attempts,
+        misses: progress.misses,
+        lastReviewedAt: progress.lastReviewedAt,
+      };
+    })
+    .sort((a, b) => a.score - b.score || b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function findMaterialForTopic(topic) {
+  return (
+    state.materials.find((material) => material.topics.includes(topic) && material.text) ||
+    state.materials.find((material) => material.topics.includes(topic)) ||
+    state.materials[0]
+  );
 }
 
 async function getPdfJs() {
@@ -246,47 +351,35 @@ async function materialFromFile(file) {
 
 function buildSchedule() {
   const minutes = Number(state.course.dailyMinutes) || 45;
-  const materials = state.materials.length ? state.materials : sampleMaterials;
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const topics = getTopicStats();
+  const daysUntilExam = getDaysUntilExam();
+  const sessionCount = Math.min(7, Math.max(3, topics.length + 1));
+  const today = new Date();
 
-  return materials.slice(0, 5).map((material, index) => {
-    const topic = material.topics[0] || material.type;
-    const verb = material.text ? "Review indexed notes from" : "Preview and tag";
+  return Array.from({ length: sessionCount }, (_, index) => {
+    const topic = topics[index % topics.length];
+    const material = findMaterialForTopic(topic.name);
+    const sessionDate = new Date(today);
+    sessionDate.setDate(today.getDate() + index);
+    const isFinalReview = daysUntilExam !== null && index === sessionCount - 1;
+    const verb = topic.score < 48 ? "Repair weak spot" : index % 2 === 0 ? "Active recall" : "Review source";
+    const task = isFinalReview
+      ? `Mixed review before ${state.course.name || "exam"}`
+      : `${verb}: ${topic.name}`;
+    const source = material ? material.name : "uploaded materials";
 
     return {
-      day: days[index % days.length],
-      task: `${verb} ${material.name}`,
-      time: `${Math.max(20, minutes - index * 5)} min`,
-      focus: topic,
+      day: formatSessionDate(sessionDate),
+      task,
+      time: `${Math.max(20, minutes - (index % 3) * 5)} min`,
+      focus: topic.name,
+      reason: `${topic.score}% confidence - ${source}`,
     };
   });
 }
 
 function buildTopics() {
-  const topicCounts = new Map();
-
-  state.materials.forEach((material) => {
-    material.topics.forEach((topic) => {
-      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
-    });
-  });
-
-  if (!topicCounts.size) {
-    return [{ name: "Upload materials", score: 30, priority: "Start" }];
-  }
-
-  return [...topicCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count], index) => {
-      const score = Math.max(34, 78 - count * 8 - index * 7);
-
-      return {
-        name,
-        score,
-        priority: score < 50 ? "High" : score < 68 ? "Medium" : "Watch",
-      };
-    });
+  return getTopicStats().slice(0, 5);
 }
 
 function buildQuestions() {
@@ -322,7 +415,7 @@ function renderMaterials() {
         <li>
           <div>
             <strong>${escapeHTML(item.name)}</strong>
-            <span>${escapeHTML(item.type)} · ${formatBytes(item.size)} · ${escapeHTML(item.topics.join(", "))}</span>
+            <span>${escapeHTML(item.type)} - ${formatBytes(item.size)} - ${escapeHTML(item.topics.join(", "))}</span>
           </div>
           <div class="file-actions">
             <em>${escapeHTML(item.status)}</em>
@@ -345,7 +438,7 @@ function renderSchedule() {
           <span>${escapeHTML(item.day)}</span>
           <div>
             <strong>${escapeHTML(item.task)}</strong>
-            <p>${escapeHTML(item.focus)}</p>
+            <p>${escapeHTML(item.reason || item.focus)}</p>
           </div>
           <em>${escapeHTML(item.time)}</em>
         </div>
@@ -364,7 +457,7 @@ function renderTopics() {
         <div class="topic-item">
           <div>
             <strong>${escapeHTML(topic.name)}</strong>
-            <span>${escapeHTML(topic.priority)}</span>
+            <span>${escapeHTML(topic.priority)} - ${topic.attempts} attempts</span>
           </div>
           <meter min="0" max="100" value="${topic.score}"></meter>
         </div>
@@ -391,11 +484,21 @@ function renderCourse() {
   document.querySelector("#dailyMinutes").value = state.course.dailyMinutes;
   document.querySelector("#nextExamCourse").textContent = state.course.name || "Course";
   document.querySelector("#nextExamDate").textContent = formatDate(state.course.examDate);
+  const daysUntilExam = getDaysUntilExam();
+  document.querySelector("#examCountdown").textContent =
+    daysUntilExam === null
+      ? "Add an exam date"
+      : daysUntilExam < 0
+        ? "Exam date has passed"
+        : `${daysUntilExam} day${daysUntilExam === 1 ? "" : "s"} to review`;
 }
 
 function renderMetrics() {
   document.querySelector("#materialCount").textContent = state.materials.length;
   document.querySelector("#todaySummary").textContent = `${Math.min(3, Math.max(1, state.schedule.length))} focused sessions`;
+  const weakestTopic = buildTopics()[0];
+  document.querySelector("#planStatus").textContent =
+    weakestTopic && weakestTopic.score < 48 ? "Needs focus" : "Balanced";
 }
 
 function renderAll() {
@@ -539,6 +642,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
   state = {
     ...structuredClone(defaultState),
     materials: [],
+    topicProgress: {},
   };
   renderAll();
 });
@@ -547,6 +651,31 @@ document.querySelector("#nextQuestion").addEventListener("click", () => {
   state.questionIndex += 1;
   renderQuestion();
   saveState();
+});
+
+document.querySelector(".answer-row").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-quiz-result]");
+
+  if (!button) {
+    return;
+  }
+
+  const questions = buildQuestions();
+  const current = questions[state.questionIndex % questions.length];
+  const progress = ensureTopicProgress(current.topic);
+  const wasHit = button.dataset.quizResult === "hit";
+
+  progress.attempts += 1;
+  progress.misses += wasHit ? 0 : 1;
+  progress.confidence = Math.max(5, Math.min(100, progress.confidence + (wasHit ? 9 : -14)));
+  progress.lastReviewedAt = new Date().toISOString();
+  state.questionIndex += 1;
+
+  document.querySelector("#quizFeedback").textContent = wasHit
+    ? `${current.topic} moved up to ${Math.round(progress.confidence)}% confidence.`
+    : `${current.topic} dropped to ${Math.round(progress.confidence)}%, so it moved higher in the plan.`;
+
+  renderAll();
 });
 
 document.querySelector("#generatePlan").addEventListener("click", () => {

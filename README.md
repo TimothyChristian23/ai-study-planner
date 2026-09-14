@@ -13,6 +13,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Study schedule preview organized around exam dates
 - Quiz card generated from sample course materials
 - Weak-topic tracker with priority levels
+- Quiz feedback that changes topic confidence and reprioritizes the plan
 - Material-grounded answer panel for indexed text files
 
 For the most reliable PDF indexing, run a local static server and open the served URL:

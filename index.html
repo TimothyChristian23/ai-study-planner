@@ -28,6 +28,7 @@
           <p class="label">Next exam</p>
           <strong id="nextExamCourse">Data Structures</strong>
           <span id="nextExamDate">Oct 18 at 9:00 AM</span>
+          <span id="examCountdown">34 days to review</span>
         </section>
       </aside>
 
@@ -113,7 +114,7 @@
                 <p class="label">Schedule</p>
                 <h3>This week</h3>
               </div>
-              <span class="status-pill">Balanced</span>
+              <span class="status-pill" id="planStatus">Balanced</span>
             </div>
             <div class="schedule-list" id="scheduleList"></div>
           </article>
@@ -130,9 +131,10 @@
               <p id="quizTopic"></p>
               <h4 id="quizQuestion"></h4>
               <div class="answer-row">
-                <button type="button">Needs review</button>
-                <button type="button">Got it</button>
+                <button type="button" data-quiz-result="miss">Needs review</button>
+                <button type="button" data-quiz-result="hit">Got it</button>
               </div>
+              <p class="quiz-feedback" id="quizFeedback" aria-live="polite"></p>
             </div>
           </article>
 

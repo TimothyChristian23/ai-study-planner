@@ -25,12 +25,21 @@ This document captures the local data shape used by the static prototype and the
       topics: ["Graph traversal"]
     }
   ],
+  topicProgress: {
+    "Graph traversal": {
+      confidence: 58,
+      attempts: 3,
+      misses: 1,
+      lastReviewedAt: "2026-09-14T18:30:00.000Z"
+    }
+  },
   schedule: [
     {
-      day: "Mon",
-      task: "Review indexed notes from Lecture 7 - Graph Traversal.pdf",
+      day: "Sep 15",
+      task: "Repair weak spot: Graph traversal",
       time: "45 min",
-      focus: "Graph traversal"
+      focus: "Graph traversal",
+      reason: "58% confidence - Lecture 7 - Graph Traversal.pdf"
     }
   ],
   questionIndex: 0
