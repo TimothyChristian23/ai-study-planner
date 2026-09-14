@@ -39,8 +39,12 @@
             <p class="eyebrow">Fall semester</p>
             <h2>Turn course chaos into a study plan.</h2>
           </div>
-          <button class="primary-button" type="button" id="generatePlan">Generate plan</button>
+          <div class="topbar-actions">
+            <button class="secondary-button" type="button" id="exportReport">Export report</button>
+            <button class="primary-button" type="button" id="generatePlan">Generate plan</button>
+          </div>
         </header>
+        <p class="export-status" id="exportStatus" aria-live="polite"></p>
 
         <section class="hero-grid" id="planner">
           <article class="panel intro-panel">

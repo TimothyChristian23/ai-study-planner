@@ -1143,6 +1143,128 @@ function answerFromMaterials(question) {
   };
 }
 
+function formatReportLineItems(items, formatter, emptyText) {
+  if (!items.length) {
+    return [`- ${emptyText}`];
+  }
+
+  return items.map(formatter);
+}
+
+function makeReportFileName() {
+  const courseSlug = (state.course.name || "study-plan")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const dateStamp = new Date().toISOString().slice(0, 10);
+
+  return `${courseSlug || "study-plan"}-${dateStamp}-report.md`;
+}
+
+function buildStudyReport() {
+  const schedule = state.schedule.length ? state.schedule : buildSchedule();
+  const openDeadlines = getOpenDeadlines();
+  const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
+  const spacedReviews = getSpacedReviewItems();
+  const completedSessions = getCompletedSessions().sort(
+    (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
+  );
+  const generatedAt = new Date().toLocaleString();
+
+  return [
+    "# AI Study Planner Report",
+    "",
+    `Generated: ${generatedAt}`,
+    `Course: ${state.course.name || "Course"}`,
+    `Exam date: ${state.course.examDate || "Not set"}`,
+    `Daily study target: ${state.course.dailyMinutes || 45} minutes`,
+    "",
+    "## Snapshot",
+    "",
+    `- Materials: ${state.materials.length}`,
+    `- Open deadlines: ${openDeadlines.length}`,
+    `- Quiz cards: ${buildQuestions().length}`,
+    `- Completed study minutes: ${getCompletedStudyMinutes()}`,
+    `- Average confidence: ${getAverageConfidence()}%`,
+    `- Study streak: ${getStudyStreak()} day(s)`,
+    "",
+    "## Current Study Plan",
+    "",
+    ...formatReportLineItems(
+      schedule,
+      (session) =>
+        `- ${session.day}: ${session.task} (${session.time}) - ${session.reason || session.focus}${
+          isSessionComplete(session) ? " [done]" : ""
+        }`,
+      "No study sessions generated yet.",
+    ),
+    "",
+    "## Upcoming Deadlines",
+    "",
+    ...formatReportLineItems(
+      openDeadlines,
+      (deadline) =>
+        `- ${deadline.title} (${deadline.type}) - due ${formatDueDate(deadline.dueDate)} - ${deadline.topic}`,
+      "No open deadlines.",
+    ),
+    "",
+    "## Weak Topics",
+    "",
+    ...formatReportLineItems(
+      topics.slice(0, 6),
+      (topic) =>
+        `- ${topic.name}: ${topic.score}% confidence, ${topic.priority} priority, ${topic.attempts} quiz attempt(s), ${topic.studySessions} study session(s)`,
+      "No topic progress yet.",
+    ),
+    "",
+    "## Spaced Review Queue",
+    "",
+    ...formatReportLineItems(
+      spacedReviews.slice(0, 6),
+      (item) =>
+        `- ${item.name}: ${item.status}, review every ${item.interval} day(s), ${item.score}% confidence`,
+      "No spaced-review items yet.",
+    ),
+    "",
+    "## Recent Completed Sessions",
+    "",
+    ...formatReportLineItems(
+      completedSessions.slice(0, 6),
+      (session) =>
+        `- ${session.task} - ${session.focus} - ${session.minutes} min - completed ${formatCompletedAt(session.completedAt)}`,
+      "No completed sessions yet.",
+    ),
+    "",
+    "## Materials",
+    "",
+    ...formatReportLineItems(
+      state.materials,
+      (material) =>
+        `- ${material.name} - ${material.type} - ${material.status} - topics: ${material.topics.join(", ")}`,
+      "No materials uploaded.",
+    ),
+    "",
+    "_Generated locally by AI Study Planner._",
+    "",
+  ].join("\n");
+}
+
+function downloadStudyReport() {
+  const report = buildStudyReport();
+  const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = makeReportFileName();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  return link.download;
+}
+
 document.querySelector("#browseFiles").addEventListener("click", () => {
   document.querySelector("#fileInput").click();
 });
@@ -1353,6 +1475,11 @@ document.querySelector(".answer-row").addEventListener("click", (event) => {
 document.querySelector("#generatePlan").addEventListener("click", () => {
   state.schedule = buildSchedule();
   renderAll();
+});
+
+document.querySelector("#exportReport").addEventListener("click", () => {
+  const fileName = downloadStudyReport();
+  document.querySelector("#exportStatus").textContent = `Exported ${fileName}`;
 });
 
 document.querySelector("#answerQuestion").addEventListener("click", () => {

@@ -164,6 +164,21 @@ h4 {
   margin-bottom: 30px;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.export-status {
+  min-height: 22px;
+  margin: -18px 0 20px;
+  color: var(--teal);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .primary-button,
 .secondary-button,
 .icon-button,
@@ -762,7 +777,9 @@ textarea {
     flex-direction: column;
   }
 
-  .topbar .primary-button {
+  .topbar .primary-button,
+  .topbar .secondary-button,
+  .topbar-actions {
     width: 100%;
   }
 

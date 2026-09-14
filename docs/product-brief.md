@@ -22,6 +22,7 @@ AI Study Planner ingests course materials and important dates, then produces an 
 - Practice with quizzes based on actual materials
 - See weak topics and review priorities
 - Ask questions and get cited answers from uploaded documents
+- Export a study report for planning, advising, or portfolio demonstration
 
 ## Differentiators
 
