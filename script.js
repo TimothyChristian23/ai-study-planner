@@ -417,6 +417,66 @@ function getCompletedStudyMinutes() {
   return getCompletedSessions().reduce((total, session) => total + (Number(session.minutes) || 0), 0);
 }
 
+function getDateKey(dateValue) {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getStudyStreak() {
+  const completedDates = new Set(getCompletedSessions().map((session) => getDateKey(session.completedAt)));
+
+  if (!completedDates.size) {
+    return 0;
+  }
+
+  let streak = 0;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+
+  while (completedDates.has(getDateKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function getAverageConfidence() {
+  const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
+
+  if (!topics.length) {
+    return 0;
+  }
+
+  const total = topics.reduce((sum, topic) => sum + topic.score, 0);
+
+  return Math.round(total / topics.length);
+}
+
+function formatCompletedAt(dateValue) {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 async function getPdfJs() {
   if (!pdfjsLoadingPromise) {
     pdfjsLoadingPromise = import(PDFJS_MODULE_URL).then((pdfjsLib) => {
@@ -751,6 +811,44 @@ function renderTopics() {
   document.querySelector("#weakTopicCount").textContent = topics.length;
 }
 
+function renderProgressInsights() {
+  const topics = buildTopics();
+  const nextTopic = topics[0];
+  const completedSessions = getCompletedSessions().sort(
+    (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
+  );
+  const reviewNext = document.querySelector("#reviewNext");
+  const sessionLog = document.querySelector("#sessionLog");
+
+  document.querySelector("#avgConfidence").textContent = `${getAverageConfidence()}%`;
+  document.querySelector("#studyStreak").textContent = getStudyStreak();
+  document.querySelector("#completedSessionCount").textContent = completedSessions.length;
+
+  reviewNext.innerHTML = nextTopic
+    ? `
+      <strong>${escapeHTML(nextTopic.name)}</strong>
+      <span>${escapeHTML(nextTopic.priority)} priority - ${nextTopic.score}% confidence</span>
+    `
+    : "<strong>Add materials</strong><span>Progress appears after study activity</span>";
+
+  sessionLog.innerHTML = completedSessions.length
+    ? completedSessions
+        .slice(0, 5)
+        .map(
+          (session) => `
+            <div class="session-log-item">
+              <div>
+                <strong>${escapeHTML(session.task)}</strong>
+                <span>${escapeHTML(session.focus)} - ${formatCompletedAt(session.completedAt)}</span>
+              </div>
+              <em>${Number(session.minutes) || 0} min</em>
+            </div>
+          `,
+        )
+        .join("")
+    : `<p class="empty-state">No completed sessions yet.</p>`;
+}
+
 function renderQuestion() {
   const questions = buildQuestions();
   state.questionIndex %= questions.length;
@@ -806,6 +904,7 @@ function renderAll() {
   renderDeadlines();
   renderSchedule();
   renderTopics();
+  renderProgressInsights();
   renderQuestion();
   renderMetrics();
   saveState();

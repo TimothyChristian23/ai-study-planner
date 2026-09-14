@@ -166,6 +166,9 @@ This document captures the local data shape used by the static prototype and the
 - `course_id`
 - `topic`
 - `confidence_score`
+- `study_sessions`
+- `quiz_attempts`
+- `quiz_misses`
 - `last_reviewed_at`
 - `updated_at`
 

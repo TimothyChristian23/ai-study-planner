@@ -243,7 +243,7 @@ h4 {
 
 .metric-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 12px;
 }
 
@@ -469,6 +469,86 @@ textarea {
   gap: 10px;
 }
 
+.progress-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.progress-summary div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.progress-summary strong {
+  display: block;
+  color: var(--blue);
+  font-size: 1.35rem;
+}
+
+.progress-summary span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.review-next {
+  border-left: 4px solid var(--teal);
+  border-radius: 8px;
+  background: #eefaf7;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.review-next strong,
+.review-next span {
+  display: block;
+}
+
+.review-next span {
+  color: #40645f;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.session-log {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.session-log-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.session-log-item strong,
+.session-log-item span {
+  display: block;
+}
+
+.session-log-item span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.session-log-item em {
+  align-self: flex-start;
+  border-radius: 999px;
+  background: #fff2dc;
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
 .schedule-item > span {
   width: 44px;
   height: 44px;
@@ -640,6 +720,7 @@ textarea {
   .topbar,
   .panel-header,
   .metric-row,
+  .progress-summary,
   .setup-form,
   .deadline-form {
     grid-template-columns: 1fr;
@@ -656,6 +737,7 @@ textarea {
 
   .file-list li,
   .deadline-item,
+  .session-log-item,
   .schedule-item {
     align-items: flex-start;
     flex-direction: column;

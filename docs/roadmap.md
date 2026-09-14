@@ -20,6 +20,7 @@
 - [x] Show grounding confidence and cited source excerpts
 - [x] Track completed study sessions and minutes studied
 - [x] Feed completed sessions back into topic confidence
+- [x] Show progress insights for confidence, streak, and recent sessions
 
 ## Phase 2: Functional MVP
 
