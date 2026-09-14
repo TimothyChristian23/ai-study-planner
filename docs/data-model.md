@@ -53,6 +53,15 @@ This document captures the local data shape used by the static prototype and the
       reason: "58% confidence - Lecture 7 - Graph Traversal.pdf"
     }
   ],
+  completedSessions: {
+    "Sep 15|Repair weak spot: Graph traversal|Graph traversal": {
+      id: "Sep 15|Repair weak spot: Graph traversal|Graph traversal",
+      task: "Repair weak spot: Graph traversal",
+      focus: "Graph traversal",
+      minutes: 45,
+      completedAt: "2026-09-14T19:05:00.000Z"
+    }
+  },
   questionIndex: 0
 }
 ```
@@ -129,6 +138,15 @@ This document captures the local data shape used by the static prototype and the
 - `focus_topic`
 - `status`
 - `created_at`
+
+### study_session_logs
+
+- `id`
+- `study_session_id`
+- `course_id`
+- `focus_topic`
+- `minutes`
+- `completed_at`
 
 ### quiz_items
 

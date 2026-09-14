@@ -109,6 +109,7 @@ const defaultState = {
   deadlines: sampleDeadlines,
   schedule: [],
   topicProgress: {},
+  completedSessions: {},
   questionIndex: 0,
 };
 
@@ -141,6 +142,7 @@ function loadState() {
       createdAt: deadline.createdAt || new Date().toISOString(),
     }));
     merged.topicProgress = merged.topicProgress || {};
+    merged.completedSessions = merged.completedSessions || {};
 
     return merged;
   } catch {
@@ -335,9 +337,12 @@ function ensureTopicProgress(topic, count = 1) {
       confidence: getInitialConfidence(topic, count),
       attempts: 0,
       misses: 0,
+      studySessions: 0,
       lastReviewedAt: null,
     };
   }
+
+  state.topicProgress[topic].studySessions ||= 0;
 
   return state.topicProgress[topic];
 }
@@ -370,6 +375,7 @@ function getTopicStats() {
         priority: score < 48 ? "High" : score < 70 ? "Medium" : "Watch",
         attempts: progress.attempts,
         misses: progress.misses,
+        studySessions: progress.studySessions || 0,
         lastReviewedAt: progress.lastReviewedAt,
       };
     })
@@ -382,6 +388,33 @@ function findMaterialForTopic(topic) {
     state.materials.find((material) => material.topics.includes(topic)) ||
     state.materials[0]
   );
+}
+
+function getSessionId(session) {
+  return `${session.day}|${session.task}|${session.focus}`;
+}
+
+function withSessionId(session) {
+  return {
+    ...session,
+    id: getSessionId(session),
+  };
+}
+
+function parseSessionMinutes(time) {
+  return Number.parseInt(time, 10) || Number(state.course.dailyMinutes) || 45;
+}
+
+function isSessionComplete(session) {
+  return Boolean(state.completedSessions?.[session.id]);
+}
+
+function getCompletedSessions() {
+  return Object.values(state.completedSessions || {});
+}
+
+function getCompletedStudyMinutes() {
+  return getCompletedSessions().reduce((total, session) => total + (Number(session.minutes) || 0), 0);
 }
 
 async function getPdfJs() {
@@ -481,7 +514,7 @@ function buildSchedule() {
       sessionDate.setDate(today.getDate() + index);
       const action = deadline.type === "Exam" || deadline.type === "Quiz" ? "Prep for" : "Make progress on";
 
-      return {
+      return withSessionId({
         day: formatSessionDate(sessionDate),
         task: `${action}: ${deadline.title}`,
         time: `${Math.max(25, minutes)} min`,
@@ -489,7 +522,7 @@ function buildSchedule() {
         reason: `${deadline.type} due ${formatDueDate(deadline.dueDate)} - ${
           daysLeft < 0 ? "past due" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
         }`,
-      };
+      });
     }
 
     const topic = topics[index % topics.length];
@@ -503,13 +536,13 @@ function buildSchedule() {
       : `${verb}: ${topic.name}`;
     const source = material ? material.name : "uploaded materials";
 
-    return {
+    return withSessionId({
       day: formatSessionDate(sessionDate),
       task,
       time: `${Math.max(20, minutes - (index % 3) * 5)} min`,
       focus: topic.name,
       reason: `${topic.score}% confidence - ${source}`,
-    };
+    });
   });
 }
 
@@ -674,16 +707,25 @@ function renderSchedule() {
 
   list.innerHTML = state.schedule
     .map(
-      (item) => `
-        <div class="schedule-item">
+      (item) => {
+        const completed = isSessionComplete(item);
+
+        return `
+        <div class="schedule-item${completed ? " is-complete" : ""}">
           <span>${escapeHTML(item.day)}</span>
           <div>
             <strong>${escapeHTML(item.task)}</strong>
             <p>${escapeHTML(item.reason || item.focus)}</p>
           </div>
-          <em>${escapeHTML(item.time)}</em>
+          <div class="schedule-actions">
+            <em>${escapeHTML(item.time)}</em>
+            <button type="button" data-session-id="${escapeHTML(item.id)}">
+              ${completed ? "Reopen" : "Done"}
+            </button>
+          </div>
         </div>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -698,7 +740,7 @@ function renderTopics() {
         <div class="topic-item">
           <div>
             <strong>${escapeHTML(topic.name)}</strong>
-            <span>${escapeHTML(topic.priority)} - ${topic.attempts} attempts</span>
+            <span>${escapeHTML(topic.priority)} - ${topic.attempts} quiz - ${topic.studySessions} sessions</span>
           </div>
           <meter min="0" max="100" value="${topic.score}"></meter>
         </div>
@@ -745,11 +787,17 @@ function renderCourse() {
 
 function renderMetrics() {
   document.querySelector("#materialCount").textContent = state.materials.length;
-  document.querySelector("#todaySummary").textContent = `${Math.min(3, Math.max(1, state.schedule.length))} focused sessions`;
+  const completedInPlan = state.schedule.filter(isSessionComplete).length;
+  document.querySelector("#todaySummary").textContent = `${completedInPlan} of ${state.schedule.length} sessions done`;
   document.querySelector("#deadlineCount").textContent = getOpenDeadlines().length;
+  document.querySelector("#studyMinutes").textContent = getCompletedStudyMinutes();
   const weakestTopic = buildTopics()[0];
   document.querySelector("#planStatus").textContent =
-    weakestTopic && weakestTopic.score < 48 ? "Needs focus" : "Balanced";
+    state.schedule.length && completedInPlan === state.schedule.length
+      ? "On track"
+      : weakestTopic && weakestTopic.score < 48
+        ? "Needs focus"
+        : "Balanced";
 }
 
 function renderAll() {
@@ -1039,12 +1087,48 @@ document.querySelector("#deadlineList").addEventListener("click", (event) => {
   }
 });
 
+document.querySelector("#scheduleList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-session-id]");
+
+  if (!button) {
+    return;
+  }
+
+  const session = state.schedule.find((item) => item.id === button.dataset.sessionId);
+
+  if (!session) {
+    return;
+  }
+
+  const progress = ensureTopicProgress(session.focus);
+
+  if (state.completedSessions[session.id]) {
+    delete state.completedSessions[session.id];
+    progress.studySessions = Math.max(0, (progress.studySessions || 0) - 1);
+    progress.confidence = Math.max(5, progress.confidence - 4);
+  } else {
+    state.completedSessions[session.id] = {
+      id: session.id,
+      task: session.task,
+      focus: session.focus,
+      minutes: parseSessionMinutes(session.time),
+      completedAt: new Date().toISOString(),
+    };
+    progress.studySessions = (progress.studySessions || 0) + 1;
+    progress.confidence = Math.min(100, progress.confidence + 4);
+    progress.lastReviewedAt = new Date().toISOString();
+  }
+
+  renderAll();
+});
+
 document.querySelector("#clearMaterials").addEventListener("click", () => {
   state = {
     ...structuredClone(defaultState),
     materials: [],
     deadlines: [],
     topicProgress: {},
+    completedSessions: {},
   };
   renderAll();
 });

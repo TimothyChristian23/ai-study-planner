@@ -18,6 +18,8 @@
 - [x] Add answer reveal with material source attribution
 - [x] Add local passage retrieval for material-grounded answers
 - [x] Show grounding confidence and cited source excerpts
+- [x] Track completed study sessions and minutes studied
+- [x] Feed completed sessions back into topic confidence
 
 ## Phase 2: Functional MVP
 

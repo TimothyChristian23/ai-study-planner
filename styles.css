@@ -169,7 +169,8 @@ h4 {
 .icon-button,
 .answer-row button,
 .file-actions button,
-.deadline-actions button {
+.deadline-actions button,
+.schedule-actions button {
   border: 0;
   border-radius: 8px;
   min-height: 42px;
@@ -396,7 +397,8 @@ textarea {
 }
 
 .file-actions,
-.deadline-actions {
+.deadline-actions,
+.schedule-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -404,7 +406,7 @@ textarea {
 
 .file-list em,
 .deadline-actions em,
-.schedule-item em,
+.schedule-actions em,
 .status-pill {
   border-radius: 999px;
   padding: 5px 9px;
@@ -453,6 +455,14 @@ textarea {
   color: var(--rose);
 }
 
+.schedule-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  background: #dff5f1;
+  color: var(--teal);
+  font-size: 0.78rem;
+}
+
 .schedule-list,
 .topic-list {
   display: grid;
@@ -474,6 +484,21 @@ textarea {
 .schedule-item p {
   display: block;
   margin: 0;
+}
+
+.schedule-item.is-complete {
+  background: #f6f8fb;
+}
+
+.schedule-item.is-complete strong,
+.schedule-item.is-complete p {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.schedule-item.is-complete .schedule-actions button {
+  background: #e8eef7;
+  color: var(--ink);
 }
 
 .quiz-card {
@@ -637,7 +662,8 @@ textarea {
   }
 
   .upload-actions,
-  .deadline-actions {
+  .deadline-actions,
+  .schedule-actions {
     flex-direction: column;
   }
 }
