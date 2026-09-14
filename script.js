@@ -8,6 +8,24 @@ const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
 
+const stopWords = new Set([
+  "about",
+  "after",
+  "before",
+  "from",
+  "have",
+  "should",
+  "that",
+  "this",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "would",
+  "your",
+]);
+
 const topicPatterns = [
   { name: "Graph traversal", terms: ["graph", "bfs", "dfs", "traversal", "shortest path"] },
   { name: "Recurrence relations", terms: ["recurrence", "master theorem", "asymptotic", "big o"] },
@@ -766,54 +784,152 @@ async function addFiles(files) {
   }
 }
 
+function getSearchTerms(question) {
+  return question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 3 && !stopWords.has(term));
+}
+
+function buildPassages(material) {
+  const sentences = splitIntoSentences(material.text);
+  const chunks = sentences.length
+    ? sentences.reduce((groups, sentence, index) => {
+        if (index % 2 === 0) {
+          groups.push(sentence);
+        } else {
+          groups[groups.length - 1] = `${groups[groups.length - 1]} ${sentence}`;
+        }
+
+        return groups;
+      }, [])
+    : normalizeWhitespace(material.text)
+        .match(/.{1,360}(\s|$)/g)
+        ?.map((chunk) => chunk.trim()) || [];
+
+  return chunks
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((text, index) => ({
+      material,
+      text,
+      index,
+      topic: material.topics[0] || material.type,
+    }));
+}
+
+function scorePassage(passage, terms) {
+  const lowerText = passage.text.toLowerCase();
+  const sourceText = `${passage.material.name} ${passage.material.topics.join(" ")}`.toLowerCase();
+  const exactHits = terms.reduce((total, term) => total + (lowerText.includes(term) ? 2 : 0), 0);
+  const sourceHits = terms.reduce((total, term) => total + (sourceText.includes(term) ? 1 : 0), 0);
+  const topicHits = passage.material.topics.reduce((total, topic) => {
+    const pattern = topicPatterns.find((item) => item.name === topic);
+    const hits = pattern?.terms.filter((term) => lowerText.includes(term)).length || 0;
+
+    return total + hits;
+  }, 0);
+
+  return exactHits + sourceHits + topicHits;
+}
+
+function findRelevantPassages(question) {
+  const terms = getSearchTerms(question);
+
+  if (!terms.length) {
+    return [];
+  }
+
+  return state.materials
+    .filter((material) => material.text)
+    .flatMap(buildPassages)
+    .map((passage) => ({
+      ...passage,
+      score: scorePassage(passage, terms),
+    }))
+    .filter((passage) => passage.score > 0)
+    .sort((a, b) => b.score - a.score || a.material.name.localeCompare(b.material.name))
+    .slice(0, 4);
+}
+
+function summarizeAnswer(question, passages) {
+  const strongest = passages[0];
+  const sourceNames = [...new Set(passages.map((passage) => passage.material.name))];
+  const topics = [...new Set(passages.flatMap((passage) => passage.material.topics))].slice(0, 3);
+  const evidence = passages
+    .slice(0, 2)
+    .map((passage) => passage.text)
+    .join(" ");
+  const nextAction = topics.length
+    ? `Use this to make an active-recall check on ${topics.join(", ")}.`
+    : "Use this section for a short active-recall check.";
+
+  return `Based on ${sourceNames.join(" and ")}, the best grounded answer is: ${evidence} ${nextAction} Strongest source: ${strongest.material.name}.`;
+}
+
+function getGroundingLabel(passages) {
+  if (!passages.length) {
+    return "Grounding: none";
+  }
+
+  const topScore = passages[0].score;
+  const sourceCount = new Set(passages.map((passage) => passage.material.name)).size;
+
+  if (topScore >= 5 && sourceCount >= 2) {
+    return "Grounding: strong";
+  }
+
+  if (topScore >= 3) {
+    return "Grounding: moderate";
+  }
+
+  return "Grounding: light";
+}
+
 function answerFromMaterials(question) {
   if (!question) {
     return {
       answer: "Ask a study question to get an answer grounded in indexed course materials.",
-      sources: [],
+      grounding: "Grounding: none",
+      citations: [],
     };
   }
 
-  const terms = question
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((term) => term.length > 3);
+  const passages = findRelevantPassages(question);
 
-  const matches = state.materials
-    .filter((material) => material.text)
-    .map((material) => {
-      const lowerText = material.text.toLowerCase();
-      const score = terms.reduce((total, term) => total + (lowerText.includes(term) ? 1 : 0), 0);
-
-      return { material, score };
-    })
-    .filter((match) => match.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (matches.length) {
-    const best = matches[0].material;
-    const lowerText = best.text.toLowerCase();
-    const firstTerm = terms.find((term) => lowerText.includes(term)) || "";
-    const index = Math.max(0, lowerText.indexOf(firstTerm));
-    const snippet = best.text.slice(Math.max(0, index - 80), index + 220).trim();
-
+  if (passages.length) {
     return {
-      answer: `I found a relevant section in ${best.name}. Start there, then turn the section into active-recall questions: ${snippet}`,
-      sources: matches.slice(0, 3).map((match) => match.material.name),
+      answer: summarizeAnswer(question, passages),
+      grounding: getGroundingLabel(passages),
+      citations: passages.map((passage) => ({
+        source: passage.material.name,
+        topic: passage.topic,
+        snippet: passage.text,
+        score: passage.score,
+      })),
     };
   }
 
   if (state.materials.length) {
     return {
       answer:
-        "I saved your materials, but I could not find indexed text that matches the question yet. Try asking about a phrase from a PDF/text file that has been indexed.",
-      sources: state.materials.slice(0, 3).map((material) => material.name),
+        "I saved your materials, but I could not ground this answer in indexed text. Try asking with a phrase or topic that appears in an indexed PDF or text file.",
+      grounding: "Grounding: none",
+      citations: state.materials.slice(0, 3).map((material) => ({
+        source: material.name,
+        topic: material.topics[0] || material.type,
+        snippet: material.text
+          ? normalizeWhitespace(material.text).slice(0, 180)
+          : "This file is saved but does not have searchable extracted text.",
+        score: 0,
+      })),
     };
   }
 
   return {
     answer: "Upload course materials first, then ask a question about the indexed content.",
-    sources: [],
+    grounding: "Grounding: none",
+    citations: [],
   };
 }
 
@@ -983,8 +1099,17 @@ document.querySelector("#answerQuestion").addEventListener("click", () => {
   const sourceList = document.querySelector("#sourceList");
 
   document.querySelector("#answerBox").textContent = result.answer;
-  sourceList.innerHTML = result.sources
-    .map((source) => `<span>${escapeHTML(source)}</span>`)
+  document.querySelector("#answerConfidence").textContent = result.grounding;
+  sourceList.innerHTML = result.citations
+    .map(
+      (citation) => `
+        <article class="citation-card">
+          <strong>${escapeHTML(citation.source)}</strong>
+          <span>${escapeHTML(citation.topic)} - match ${citation.score}</span>
+          <p>${escapeHTML(citation.snippet)}</p>
+        </article>
+      `,
+    )
     .join("");
 });
 

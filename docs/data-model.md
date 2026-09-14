@@ -110,6 +110,16 @@ This document captures the local data shape used by the static prototype and the
 - `source_page`
 - `created_at`
 
+### answer_citations
+
+- `id`
+- `course_id`
+- `material_chunk_id`
+- `question`
+- `answer_excerpt`
+- `match_score`
+- `created_at`
+
 ### study_sessions
 
 - `id`

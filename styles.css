@@ -552,20 +552,43 @@ textarea {
   line-height: 1.55;
 }
 
+.answer-meta {
+  margin-top: 10px;
+  color: var(--teal);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .source-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  gap: 10px;
   margin-top: 10px;
 }
 
-.source-list span {
-  border-radius: 999px;
-  padding: 6px 10px;
+.citation-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: #e8eef7;
-  color: var(--ink);
-  font-size: 0.8rem;
+  padding: 12px;
+}
+
+.citation-card strong,
+.citation-card span {
+  display: block;
+}
+
+.citation-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
   font-weight: 800;
+  margin-top: 3px;
+}
+
+.citation-card p {
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 8px 0 0;
 }
 
 @media (max-width: 980px) {

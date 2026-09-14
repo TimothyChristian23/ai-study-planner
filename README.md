@@ -15,7 +15,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Source-backed quiz cards generated from indexed course materials
 - Weak-topic tracker with priority levels
 - Quiz feedback that changes topic confidence and reprioritizes the plan
-- Material-grounded answer panel for indexed text files
+- Material-grounded answer panel with passage retrieval and citations
 
 For the most reliable PDF indexing, run a local static server and open the served URL:
 
