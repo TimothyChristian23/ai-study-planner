@@ -9,13 +9,19 @@ This repo currently includes a dependency-free static prototype with the first f
 - Upload queue for syllabi, notes, PDFs, and assignments
 - Drag-and-drop or file picker material intake
 - Local persistence for course name, exam date, daily study minutes, and uploaded material metadata
-- Lightweight local indexing for `.txt`, `.md`, and `.csv` files
+- Lightweight local indexing for `.txt`, `.md`, `.csv`, and PDF files
 - Study schedule preview organized around exam dates
 - Quiz card generated from sample course materials
 - Weak-topic tracker with priority levels
 - Material-grounded answer panel for indexed text files
 
-Open `index.html` in a browser to preview the current prototype.
+For the most reliable PDF indexing, run a local static server and open the served URL:
+
+```powershell
+node scripts/dev-server.mjs
+```
+
+You can also open `index.html` directly in a browser for the non-PDF parts of the prototype.
 
 ## Product Goals
 
@@ -35,4 +41,4 @@ Open `index.html` in a browser to preview the current prototype.
 
 ## Roadmap
 
-See `docs/roadmap.md` for a phased build plan.
+See `docs/roadmap.md` for a phased build plan and `docs/data-model.md` for the MVP data model.

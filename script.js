@@ -1,5 +1,11 @@
 const STORAGE_KEY = "ai-study-planner-state-v1";
 const MAX_TEXT_CHARS = 18000;
+const MAX_PDF_PAGES = 35;
+const PDFJS_VERSION = "6.3.289";
+const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`;
+const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
+
+let pdfjsLoadingPromise;
 
 const topicPatterns = [
   { name: "Graph traversal", terms: ["graph", "bfs", "dfs", "traversal", "shortest path"] },
@@ -147,6 +153,10 @@ function isTextFile(fileName) {
   return ["txt", "md", "csv"].includes(extractExtension(fileName));
 }
 
+function isPdfFile(fileName) {
+  return extractExtension(fileName) === "pdf";
+}
+
 function inferTopics(text) {
   const haystack = text.toLowerCase();
   const matchedTopics = topicPatterns
@@ -156,19 +166,80 @@ function inferTopics(text) {
   return matchedTopics.length ? matchedTopics : ["General review"];
 }
 
+async function getPdfJs() {
+  if (!pdfjsLoadingPromise) {
+    pdfjsLoadingPromise = import(PDFJS_MODULE_URL).then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+      return pdfjsLib;
+    });
+  }
+
+  return pdfjsLoadingPromise;
+}
+
+async function extractPdfText(file) {
+  const pdfjsLib = await getPdfJs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
+  const pages = [];
+
+  for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const pageText = content.items.map((item) => item.str).join(" ");
+    pages.push(pageText);
+
+    if (pages.join(" ").length >= MAX_TEXT_CHARS) {
+      break;
+    }
+  }
+
+  return {
+    text: pages.join("\n\n").slice(0, MAX_TEXT_CHARS),
+    pageCount: pdf.numPages,
+    indexedPages: pageLimit,
+  };
+}
+
 async function materialFromFile(file) {
   const canIndex = isTextFile(file.name);
-  const text = canIndex ? (await file.text()).slice(0, MAX_TEXT_CHARS) : "";
+  const canParsePdf = isPdfFile(file.name);
+  let text = "";
+  let pageCount = 0;
+  let indexedPages = 0;
+  let status = `${extractExtension(file.name).toUpperCase()} saved`;
+
+  if (canIndex) {
+    text = (await file.text()).slice(0, MAX_TEXT_CHARS);
+    status = "Text indexed";
+  }
+
+  if (canParsePdf) {
+    try {
+      const result = await extractPdfText(file);
+      text = result.text;
+      pageCount = result.pageCount;
+      indexedPages = result.indexedPages;
+      status = text ? "PDF indexed" : "PDF saved";
+    } catch (error) {
+      console.warn("PDF extraction failed", error);
+      status = "PDF saved";
+    }
+  }
+
   const topicSource = `${file.name} ${text}`;
 
   return {
     id: makeId(),
     name: file.name,
     type: inferType(file.name),
-    status: canIndex ? "Text indexed" : `${extractExtension(file.name).toUpperCase()} saved`,
+    status,
     size: file.size,
     uploadedAt: new Date().toISOString(),
     text,
+    pageCount,
+    indexedPages,
     topics: inferTopics(topicSource),
   };
 }
@@ -344,9 +415,18 @@ async function addFiles(files) {
     return;
   }
 
-  const newMaterials = await Promise.all(incoming.map(materialFromFile));
-  state.materials = [...newMaterials, ...state.materials];
-  renderAll();
+  const uploadStatus = document.querySelector("#uploadStatus");
+
+  try {
+    uploadStatus.textContent = `Indexing ${incoming.length} file${incoming.length === 1 ? "" : "s"}...`;
+    const newMaterials = await Promise.all(incoming.map(materialFromFile));
+    state.materials = [...newMaterials, ...state.materials];
+    uploadStatus.textContent = `Added ${newMaterials.length} material${newMaterials.length === 1 ? "" : "s"}.`;
+    renderAll();
+  } catch (error) {
+    console.error(error);
+    uploadStatus.textContent = "One or more files could not be processed. Try a smaller PDF or a text export.";
+  }
 }
 
 function answerFromMaterials(question) {
@@ -389,7 +469,7 @@ function answerFromMaterials(question) {
   if (state.materials.length) {
     return {
       answer:
-        "I saved your materials, but only text-based files are searchable in this first step. PDF parsing and AI retrieval are the next implementation layer.",
+        "I saved your materials, but I could not find indexed text that matches the question yet. Try asking about a phrase from a PDF/text file that has been indexed.",
       sources: state.materials.slice(0, 3).map((material) => material.name),
     };
   }

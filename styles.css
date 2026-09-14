@@ -341,6 +341,14 @@ textarea {
   line-height: 1.5;
 }
 
+.upload-status {
+  min-height: 22px;
+  margin: 12px 0 0;
+  color: var(--teal);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .file-list {
   list-style: none;
   padding: 0;
