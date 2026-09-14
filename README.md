@@ -14,6 +14,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Study schedule preview organized around exam dates
 - Study session completion tracking with total minutes studied
 - Progress insights for confidence, streak, completed sessions, and recent activity
+- Spaced-review queue that schedules topics by confidence and review recency
 - Source-backed quiz cards generated from indexed course materials
 - Weak-topic tracker with priority levels
 - Quiz feedback that changes topic confidence and reprioritizes the plan

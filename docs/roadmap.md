@@ -21,6 +21,7 @@
 - [x] Track completed study sessions and minutes studied
 - [x] Feed completed sessions back into topic confidence
 - [x] Show progress insights for confidence, streak, and recent sessions
+- [x] Add spaced repetition review queue for due topics
 
 ## Phase 2: Functional MVP
 

@@ -462,6 +462,44 @@ function getAverageConfidence() {
   return Math.round(total / topics.length);
 }
 
+function getReviewIntervalDays(topic) {
+  if (topic.score < 45) return 1;
+  if (topic.score < 65) return 2;
+  if (topic.score < 80) return 4;
+  return 7;
+}
+
+function getSpacedReviewItems() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return getTopicStats()
+    .filter((topic) => topic.name !== "Upload materials")
+    .map((topic) => {
+      const progress = ensureTopicProgress(topic.name, topic.count);
+      const lastReviewed = progress.lastReviewedAt ? new Date(progress.lastReviewedAt) : null;
+      const interval = getReviewIntervalDays(topic);
+      const dueDate = lastReviewed ? new Date(lastReviewed) : new Date(today);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (lastReviewed) {
+        dueDate.setDate(dueDate.getDate() + interval);
+      }
+
+      const daysUntilDue = Math.ceil((dueDate - today) / 86400000);
+      const status = daysUntilDue <= 0 ? "Due" : daysUntilDue <= 2 ? "Soon" : "Scheduled";
+
+      return {
+        ...topic,
+        interval,
+        dueDate,
+        daysUntilDue,
+        status,
+      };
+    })
+    .sort((a, b) => a.daysUntilDue - b.daysUntilDue || a.score - b.score);
+}
+
 function formatCompletedAt(dateValue) {
   const date = new Date(dateValue);
 
@@ -814,22 +852,47 @@ function renderTopics() {
 function renderProgressInsights() {
   const topics = buildTopics();
   const nextTopic = topics[0];
+  const spacedReviewItems = getSpacedReviewItems();
+  const nextReview = spacedReviewItems.find((item) => item.status !== "Scheduled") || spacedReviewItems[0];
   const completedSessions = getCompletedSessions().sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
   );
   const reviewNext = document.querySelector("#reviewNext");
+  const spacedReviewList = document.querySelector("#spacedReviewList");
   const sessionLog = document.querySelector("#sessionLog");
 
   document.querySelector("#avgConfidence").textContent = `${getAverageConfidence()}%`;
   document.querySelector("#studyStreak").textContent = getStudyStreak();
   document.querySelector("#completedSessionCount").textContent = completedSessions.length;
 
-  reviewNext.innerHTML = nextTopic
+  reviewNext.innerHTML = nextReview
+    ? `
+      <strong>${escapeHTML(nextReview.name)}</strong>
+      <span>${nextReview.status} for spaced review - ${nextReview.score}% confidence</span>
+    `
+    : nextTopic
     ? `
       <strong>${escapeHTML(nextTopic.name)}</strong>
       <span>${escapeHTML(nextTopic.priority)} priority - ${nextTopic.score}% confidence</span>
     `
     : "<strong>Add materials</strong><span>Progress appears after study activity</span>";
+
+  spacedReviewList.innerHTML = spacedReviewItems.length
+    ? spacedReviewItems
+        .slice(0, 4)
+        .map(
+          (item) => `
+            <div class="spaced-review-item">
+              <div>
+                <strong>${escapeHTML(item.name)}</strong>
+                <span>${item.status} - review every ${item.interval} day${item.interval === 1 ? "" : "s"}</span>
+              </div>
+              <button type="button" data-review-topic="${escapeHTML(item.name)}">Reviewed</button>
+            </div>
+          `,
+        )
+        .join("")
+    : `<p class="empty-state">Upload materials to build a spaced-review queue.</p>`;
 
   sessionLog.innerHTML = completedSessions.length
     ? completedSessions
@@ -1217,6 +1280,22 @@ document.querySelector("#scheduleList").addEventListener("click", (event) => {
     progress.confidence = Math.min(100, progress.confidence + 4);
     progress.lastReviewedAt = new Date().toISOString();
   }
+
+  renderAll();
+});
+
+document.querySelector("#spacedReviewList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-review-topic]");
+
+  if (!button) {
+    return;
+  }
+
+  const topic = button.dataset.reviewTopic;
+  const progress = ensureTopicProgress(topic);
+  progress.studySessions = (progress.studySessions || 0) + 1;
+  progress.confidence = Math.min(100, progress.confidence + 3);
+  progress.lastReviewedAt = new Date().toISOString();
 
   renderAll();
 });

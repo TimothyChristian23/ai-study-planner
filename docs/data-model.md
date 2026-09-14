@@ -41,6 +41,7 @@ This document captures the local data shape used by the static prototype and the
       confidence: 58,
       attempts: 3,
       misses: 1,
+      studySessions: 2,
       lastReviewedAt: "2026-09-14T18:30:00.000Z"
     }
   },

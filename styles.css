@@ -170,7 +170,8 @@ h4 {
 .answer-row button,
 .file-actions button,
 .deadline-actions button,
-.schedule-actions button {
+.schedule-actions button,
+.spaced-review-item button {
   border: 0;
   border-radius: 8px;
   min-height: 42px;
@@ -512,6 +513,40 @@ textarea {
   margin-top: 4px;
 }
 
+.spaced-review-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.spaced-review-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.spaced-review-item strong,
+.spaced-review-item span {
+  display: block;
+}
+
+.spaced-review-item span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.spaced-review-item button {
+  min-height: 32px;
+  padding: 0 12px;
+  background: #dff5f1;
+  color: var(--teal);
+  font-size: 0.78rem;
+}
+
 .session-log {
   display: grid;
   gap: 10px;
@@ -737,6 +772,7 @@ textarea {
 
   .file-list li,
   .deadline-item,
+  .spaced-review-item,
   .session-log-item,
   .schedule-item {
     align-items: flex-start;
