@@ -4,13 +4,16 @@ AI Study Planner is a portfolio app concept for turning course materials into a 
 
 ## First Version
 
-This initial repo includes a dependency-free static prototype:
+This repo currently includes a dependency-free static prototype with the first functional intake step:
 
 - Upload queue for syllabi, notes, PDFs, and assignments
+- Drag-and-drop or file picker material intake
+- Local persistence for course name, exam date, daily study minutes, and uploaded material metadata
+- Lightweight local indexing for `.txt`, `.md`, and `.csv` files
 - Study schedule preview organized around exam dates
 - Quiz card generated from sample course materials
 - Weak-topic tracker with priority levels
-- Material-grounded answer panel for study questions
+- Material-grounded answer panel for indexed text files
 
 Open `index.html` in a browser to preview the current prototype.
 

@@ -26,8 +26,8 @@
 
         <section class="mini-panel">
           <p class="label">Next exam</p>
-          <strong>Data Structures</strong>
-          <span>Oct 18 at 9:00 AM</span>
+          <strong id="nextExamCourse">Data Structures</strong>
+          <span id="nextExamDate">Oct 18 at 9:00 AM</span>
         </section>
       </aside>
 
@@ -43,21 +43,21 @@
         <section class="hero-grid" id="planner">
           <article class="panel intro-panel">
             <p class="label">Today</p>
-            <h3>3 focused sessions</h3>
+            <h3 id="todaySummary">3 focused sessions</h3>
             <p>
               The planner balances deadlines, weak topics, and spaced review so students know exactly what to work on next.
             </p>
             <div class="metric-row">
               <div>
-                <strong>8</strong>
+                <strong id="materialCount">8</strong>
                 <span>materials</span>
               </div>
               <div>
-                <strong>4</strong>
+                <strong id="weakTopicCount">4</strong>
                 <span>weak topics</span>
               </div>
               <div>
-                <strong>12</strong>
+                <strong id="quizItemCount">12</strong>
                 <span>quiz items</span>
               </div>
             </div>
@@ -69,12 +69,38 @@
                 <p class="label">Materials</p>
                 <h3>Upload queue</h3>
               </div>
-              <button class="icon-button" type="button" id="addMaterial" aria-label="Add sample material">+</button>
+              <button class="icon-button" type="button" id="browseFiles" aria-label="Upload course materials">+</button>
             </div>
-            <div class="upload-drop">
-              <span>PDF</span>
-              <p>Syllabi, notes, assignments, and readings</p>
+            <input
+              id="fileInput"
+              type="file"
+              multiple
+              accept=".pdf,.txt,.md,.csv,.doc,.docx,.ppt,.pptx"
+              hidden
+            />
+            <div class="upload-drop" id="dropZone" tabindex="0">
+              <span>UP</span>
+              <p><strong>Drop or choose course files.</strong> PDFs are saved as materials; text files are indexed locally.</p>
             </div>
+            <form class="setup-form" id="studySetup">
+              <label>
+                Course
+                <input id="courseName" name="courseName" type="text" value="Data Structures" />
+              </label>
+              <label>
+                Exam date
+                <input id="examDate" name="examDate" type="date" />
+              </label>
+              <label>
+                Daily minutes
+                <input id="dailyMinutes" name="dailyMinutes" type="number" min="15" max="240" step="5" value="45" />
+              </label>
+            </form>
+            <div class="upload-actions">
+              <button class="secondary-button" type="button" id="chooseFiles">Choose files</button>
+              <button class="secondary-button quiet-button" type="button" id="clearMaterials">Reset demo</button>
+            </div>
+            <p class="empty-state" id="emptyMaterials">No uploaded files yet. Add a syllabus, notes, or an assignment to start planning.</p>
             <ul class="file-list" id="fileList"></ul>
           </article>
         </section>
@@ -132,6 +158,7 @@
             <div class="answer-box" id="answerBox">
               Review BFS queue behavior, DFS recursion order, and when each traversal is preferred. Source: Lecture 7 notes and Assignment 3 brief.
             </div>
+            <div class="source-list" id="sourceList"></div>
           </article>
         </section>
       </section>

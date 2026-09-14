@@ -2,9 +2,12 @@
 
 ## Phase 1: Static Prototype
 
-- Build the landing dashboard
-- Mock upload state, study schedule, quiz, and weak-topic panels
-- Define course, material, quiz, and progress data models
+- [x] Build the landing dashboard
+- [x] Mock upload state, study schedule, quiz, and weak-topic panels
+- [x] Define course, material, quiz, and progress data models
+- [x] Add local material intake with file picker and drag-and-drop
+- [x] Persist course setup and uploaded material metadata in local storage
+- [x] Index basic text files for first-pass material-grounded answers
 
 ## Phase 2: Functional MVP
 

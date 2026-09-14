@@ -32,6 +32,7 @@ body {
 }
 
 button,
+input,
 textarea {
   font: inherit;
 }
@@ -161,7 +162,8 @@ h4 {
 .primary-button,
 .secondary-button,
 .icon-button,
-.answer-row button {
+.answer-row button,
+.file-actions button {
   border: 0;
   border-radius: 8px;
   min-height: 42px;
@@ -179,6 +181,12 @@ h4 {
   background: #e8eef7;
   color: var(--ink);
   padding: 0 14px;
+}
+
+.quiet-button {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 
 .icon-button {
@@ -270,6 +278,12 @@ h4 {
   background: #f3f7fb;
 }
 
+.upload-drop.is-dragging,
+.upload-drop:focus {
+  border-color: var(--teal);
+  outline: 3px solid rgba(15, 143, 131, 0.16);
+}
+
 .upload-drop span {
   width: 52px;
   height: 52px;
@@ -284,6 +298,47 @@ h4 {
 .upload-drop p {
   margin: 0;
   color: var(--muted);
+}
+
+.upload-drop strong {
+  color: var(--ink);
+}
+
+.setup-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.9fr) minmax(120px, 0.7fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.setup-form label,
+.answer-panel label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.setup-form input,
+textarea {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: #fff;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.empty-state {
+  margin: 14px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .file-list {
@@ -311,6 +366,12 @@ h4 {
   display: block;
 }
 
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .file-list em,
 .schedule-item em,
 .status-pill {
@@ -322,6 +383,14 @@ h4 {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.file-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  background: #f7e8ec;
+  color: var(--rose);
+  font-size: 0.78rem;
 }
 
 .schedule-list,
@@ -383,20 +452,8 @@ meter {
   height: 12px;
 }
 
-.answer-panel label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-weight: 800;
-}
-
 textarea {
-  width: 100%;
   resize: vertical;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  color: var(--ink);
 }
 
 .answer-panel .primary-button {
@@ -410,6 +467,22 @@ textarea {
   padding: 14px;
   color: #334155;
   line-height: 1.55;
+}
+
+.source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.source-list span {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #e8eef7;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 @media (max-width: 980px) {
@@ -435,7 +508,8 @@ textarea {
 
   .topbar,
   .panel-header,
-  .metric-row {
+  .metric-row,
+  .setup-form {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
@@ -451,6 +525,10 @@ textarea {
   .file-list li,
   .schedule-item {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upload-actions {
     flex-direction: column;
   }
 }
