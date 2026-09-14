@@ -10,6 +10,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Drag-and-drop or file picker material intake
 - Local persistence for course name, exam date, daily study minutes, and uploaded material metadata
 - Lightweight local indexing for `.txt`, `.md`, `.csv`, and PDF files
+- Assignment, quiz, project, and exam deadline tracking
 - Study schedule preview organized around exam dates
 - Quiz card generated from sample course materials
 - Weak-topic tracker with priority levels

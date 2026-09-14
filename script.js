@@ -50,6 +50,36 @@ const sampleMaterials = [
   },
 ];
 
+const sampleDeadlines = [
+  {
+    id: "sample-deadline-assignment-3",
+    title: "Assignment 3",
+    type: "Assignment",
+    dueDate: "2026-09-24",
+    topic: "Graph traversal",
+    completed: false,
+    createdAt: "2026-09-14T12:10:00.000Z",
+  },
+  {
+    id: "sample-deadline-graph-quiz",
+    title: "Graph Traversal Quiz",
+    type: "Quiz",
+    dueDate: "2026-09-28",
+    topic: "Graph traversal",
+    completed: false,
+    createdAt: "2026-09-14T12:12:00.000Z",
+  },
+  {
+    id: "sample-deadline-midterm",
+    title: "Midterm Exam",
+    type: "Exam",
+    dueDate: "2026-10-18",
+    topic: "Exam logistics",
+    completed: false,
+    createdAt: "2026-09-14T12:14:00.000Z",
+  },
+];
+
 const defaultState = {
   course: {
     name: "Data Structures",
@@ -57,6 +87,7 @@ const defaultState = {
     dailyMinutes: 45,
   },
   materials: sampleMaterials,
+  deadlines: sampleDeadlines,
   schedule: [],
   topicProgress: {},
   questionIndex: 0,
@@ -79,6 +110,16 @@ function loadState() {
       ...material,
       topics: material.topics?.length ? material.topics : inferTopics(`${material.name} ${material.text || ""}`),
       text: material.text || "",
+    }));
+    merged.deadlines = (merged.deadlines || []).map((deadline) => ({
+      ...deadline,
+      id: deadline.id || makeId(),
+      title: deadline.title || "Untitled deadline",
+      type: deadline.type || "Assignment",
+      dueDate: deadline.dueDate || merged.course?.examDate || defaultState.course.examDate,
+      topic: deadline.topic || "General review",
+      completed: Boolean(deadline.completed),
+      createdAt: deadline.createdAt || new Date().toISOString(),
     }));
     merged.topicProgress = merged.topicProgress || {};
 
@@ -164,6 +205,55 @@ function getDaysUntilExam() {
   return Math.ceil((examDate - today) / 86400000);
 }
 
+function parseDeadlineDate(dateValue) {
+  if (!dateValue) {
+    return null;
+  }
+
+  return new Date(`${dateValue}T23:59:00`);
+}
+
+function getDaysUntil(dateValue) {
+  const dueDate = parseDeadlineDate(dateValue);
+
+  if (!dueDate) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((dueDate - today) / 86400000);
+}
+
+function formatDueDate(dateValue) {
+  const dueDate = parseDeadlineDate(dateValue);
+
+  if (!dueDate) {
+    return "No due date";
+  }
+
+  return dueDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function getOpenDeadlines() {
+  return [...state.deadlines]
+    .filter((deadline) => !deadline.completed)
+    .sort((a, b) => {
+      const aDate = parseDeadlineDate(a.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+      const bDate = parseDeadlineDate(b.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+
+      return aDate - bDate || a.title.localeCompare(b.title);
+    });
+}
+
+function getNextDeadline() {
+  return getOpenDeadlines()[0] || null;
+}
+
 function inferType(fileName) {
   const lower = fileName.toLowerCase();
 
@@ -203,6 +293,10 @@ function collectTopicCounts() {
     material.topics.forEach((topic) => {
       topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
     });
+  });
+
+  getOpenDeadlines().forEach((deadline) => {
+    topicCounts.set(deadline.topic, (topicCounts.get(deadline.topic) || 0) + 1);
   });
 
   return topicCounts;
@@ -352,19 +446,41 @@ async function materialFromFile(file) {
 function buildSchedule() {
   const minutes = Number(state.course.dailyMinutes) || 45;
   const topics = getTopicStats();
-  const daysUntilExam = getDaysUntilExam();
-  const sessionCount = Math.min(7, Math.max(3, topics.length + 1));
+  const openDeadlines = getOpenDeadlines();
+  const sessionCount = Math.min(7, Math.max(3, topics.length + Math.min(openDeadlines.length, 3)));
   const today = new Date();
 
   return Array.from({ length: sessionCount }, (_, index) => {
+    const deadline = openDeadlines[index % Math.max(openDeadlines.length, 1)];
+    const shouldPlanDeadline =
+      Boolean(deadline) && (index % 2 === 0 || getDaysUntil(deadline.dueDate) <= 7 || topics.length === 1);
+
+    if (shouldPlanDeadline) {
+      const daysLeft = getDaysUntil(deadline.dueDate);
+      const topicName = deadline.topic || "General review";
+      const sessionDate = new Date(today);
+      sessionDate.setDate(today.getDate() + index);
+      const action = deadline.type === "Exam" || deadline.type === "Quiz" ? "Prep for" : "Make progress on";
+
+      return {
+        day: formatSessionDate(sessionDate),
+        task: `${action}: ${deadline.title}`,
+        time: `${Math.max(25, minutes)} min`,
+        focus: topicName,
+        reason: `${deadline.type} due ${formatDueDate(deadline.dueDate)} - ${
+          daysLeft < 0 ? "past due" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+        }`,
+      };
+    }
+
     const topic = topics[index % topics.length];
     const material = findMaterialForTopic(topic.name);
     const sessionDate = new Date(today);
     sessionDate.setDate(today.getDate() + index);
-    const isFinalReview = daysUntilExam !== null && index === sessionCount - 1;
+    const isFinalReview = Boolean(openDeadlines.length) && index === sessionCount - 1;
     const verb = topic.score < 48 ? "Repair weak spot" : index % 2 === 0 ? "Active recall" : "Review source";
     const task = isFinalReview
-      ? `Mixed review before ${state.course.name || "exam"}`
+      ? `Mixed review before ${openDeadlines[0].title}`
       : `${verb}: ${topic.name}`;
     const source = material ? material.name : "uploaded materials";
 
@@ -427,6 +543,50 @@ function renderMaterials() {
     .join("");
 }
 
+function renderDeadlines() {
+  const list = document.querySelector("#deadlineList");
+  const empty = document.querySelector("#emptyDeadlines");
+  const sortedDeadlines = [...state.deadlines].sort((a, b) => {
+    if (a.completed !== b.completed) {
+      return a.completed ? 1 : -1;
+    }
+
+    const aDate = parseDeadlineDate(a.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+    const bDate = parseDeadlineDate(b.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+
+    return aDate - bDate || a.title.localeCompare(b.title);
+  });
+
+  empty.hidden = sortedDeadlines.length > 0;
+  list.innerHTML = sortedDeadlines
+    .map((deadline) => {
+      const daysLeft = getDaysUntil(deadline.dueDate);
+      const dueLabel =
+        daysLeft === null
+          ? "No date"
+          : daysLeft < 0
+            ? "Past due"
+            : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
+
+      return `
+        <div class="deadline-item${deadline.completed ? " is-complete" : ""}">
+          <div>
+            <strong>${escapeHTML(deadline.title)}</strong>
+            <span>${escapeHTML(deadline.type)} - ${formatDueDate(deadline.dueDate)} - ${escapeHTML(deadline.topic)}</span>
+          </div>
+          <div class="deadline-actions">
+            <em>${dueLabel}</em>
+            <button type="button" data-toggle-deadline="${escapeHTML(deadline.id)}">
+              ${deadline.completed ? "Reopen" : "Done"}
+            </button>
+            <button type="button" data-remove-deadline="${escapeHTML(deadline.id)}">Remove</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderSchedule() {
   const list = document.querySelector("#scheduleList");
   state.schedule = buildSchedule();
@@ -482,20 +642,25 @@ function renderCourse() {
   document.querySelector("#courseName").value = state.course.name;
   document.querySelector("#examDate").value = state.course.examDate;
   document.querySelector("#dailyMinutes").value = state.course.dailyMinutes;
-  document.querySelector("#nextExamCourse").textContent = state.course.name || "Course";
-  document.querySelector("#nextExamDate").textContent = formatDate(state.course.examDate);
-  const daysUntilExam = getDaysUntilExam();
+  const nextDeadline = getNextDeadline();
+
+  document.querySelector("#nextExamCourse").textContent = nextDeadline?.title || state.course.name || "Course";
+  document.querySelector("#nextExamDate").textContent = nextDeadline
+    ? `${nextDeadline.type} - ${formatDueDate(nextDeadline.dueDate)}`
+    : formatDate(state.course.examDate);
+  const daysUntilExam = nextDeadline ? getDaysUntil(nextDeadline.dueDate) : getDaysUntilExam();
   document.querySelector("#examCountdown").textContent =
     daysUntilExam === null
-      ? "Add an exam date"
+      ? "Add a due date"
       : daysUntilExam < 0
-        ? "Exam date has passed"
-        : `${daysUntilExam} day${daysUntilExam === 1 ? "" : "s"} to review`;
+        ? "Deadline has passed"
+        : `${daysUntilExam} day${daysUntilExam === 1 ? "" : "s"} to prepare`;
 }
 
 function renderMetrics() {
   document.querySelector("#materialCount").textContent = state.materials.length;
   document.querySelector("#todaySummary").textContent = `${Math.min(3, Math.max(1, state.schedule.length))} focused sessions`;
+  document.querySelector("#deadlineCount").textContent = getOpenDeadlines().length;
   const weakestTopic = buildTopics()[0];
   document.querySelector("#planStatus").textContent =
     weakestTopic && weakestTopic.score < 48 ? "Needs focus" : "Balanced";
@@ -504,6 +669,7 @@ function renderMetrics() {
 function renderAll() {
   renderCourse();
   renderMaterials();
+  renderDeadlines();
   renderSchedule();
   renderTopics();
   renderQuestion();
@@ -638,10 +804,62 @@ document.querySelector("#studySetup").addEventListener("input", () => {
   renderAll();
 });
 
+document.querySelector("#deadlineForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const titleInput = document.querySelector("#deadlineTitle");
+  const typeInput = document.querySelector("#deadlineType");
+  const dueDateInput = document.querySelector("#deadlineDate");
+  const topicInput = document.querySelector("#deadlineTopic");
+  const title = titleInput.value.trim();
+  const topic = topicInput.value.trim() || inferTopics(title)[0];
+
+  if (!title || !dueDateInput.value) {
+    return;
+  }
+
+  state.deadlines = [
+    ...state.deadlines,
+    {
+      id: makeId(),
+      title,
+      type: typeInput.value,
+      dueDate: dueDateInput.value,
+      topic,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  titleInput.value = "";
+  topicInput.value = "";
+  renderAll();
+});
+
+document.querySelector("#deadlineList").addEventListener("click", (event) => {
+  const toggleButton = event.target.closest("[data-toggle-deadline]");
+  const removeButton = event.target.closest("[data-remove-deadline]");
+
+  if (toggleButton) {
+    state.deadlines = state.deadlines.map((deadline) =>
+      deadline.id === toggleButton.dataset.toggleDeadline
+        ? { ...deadline, completed: !deadline.completed }
+        : deadline,
+    );
+    renderAll();
+  }
+
+  if (removeButton) {
+    state.deadlines = state.deadlines.filter((deadline) => deadline.id !== removeButton.dataset.removeDeadline);
+    renderAll();
+  }
+});
+
 document.querySelector("#clearMaterials").addEventListener("click", () => {
   state = {
     ...structuredClone(defaultState),
     materials: [],
+    deadlines: [],
     topicProgress: {},
   };
   renderAll();

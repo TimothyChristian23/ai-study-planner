@@ -12,11 +12,13 @@
 - [x] Document the prototype and MVP data models
 - [x] Track quiz feedback by topic in local storage
 - [x] Generate adaptive study sessions from weak topics and exam timing
+- [x] Add assignment, quiz, project, and exam deadline tracking
+- [x] Blend urgent deadlines into generated study sessions
 
 ## Phase 2: Functional MVP
 
 - Add authentication
-- Store courses, exam dates, assignments, and study sessions
+- Store courses, deadlines, assignments, and study sessions
 - Parse uploaded PDFs and text files
 - Persist generated schedules from deadlines and available study time
 

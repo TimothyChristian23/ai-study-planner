@@ -25,6 +25,17 @@ This document captures the local data shape used by the static prototype and the
       topics: ["Graph traversal"]
     }
   ],
+  deadlines: [
+    {
+      id: "uuid",
+      title: "Assignment 3",
+      type: "Assignment",
+      dueDate: "2026-09-24",
+      topic: "Graph traversal",
+      completed: false,
+      createdAt: "2026-09-14T12:10:00.000Z"
+    }
+  ],
   topicProgress: {
     "Graph traversal": {
       confidence: 58,
@@ -76,6 +87,18 @@ This document captures the local data shape used by the static prototype and the
 - `page_count`
 - `indexed_pages`
 - `created_at`
+
+### deadlines
+
+- `id`
+- `course_id`
+- `title`
+- `type`
+- `due_date`
+- `topic`
+- `completed`
+- `created_at`
+- `updated_at`
 
 ### material_chunks
 

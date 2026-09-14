@@ -33,6 +33,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -167,7 +168,8 @@ h4 {
 .secondary-button,
 .icon-button,
 .answer-row button,
-.file-actions button {
+.file-actions button,
+.deadline-actions button {
   border: 0;
   border-radius: 8px;
   min-height: 42px;
@@ -240,7 +242,7 @@ h4 {
 
 .metric-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -316,6 +318,7 @@ h4 {
 }
 
 .setup-form label,
+.deadline-form label,
 .answer-panel label {
   color: var(--muted);
   font-size: 0.84rem;
@@ -323,6 +326,8 @@ h4 {
 }
 
 .setup-form input,
+.deadline-form input,
+.deadline-form select,
 textarea {
   width: 100%;
   margin-top: 6px;
@@ -331,6 +336,17 @@ textarea {
   padding: 11px 12px;
   color: var(--ink);
   background: #fff;
+}
+
+.deadline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.75fr);
+  gap: 10px;
+}
+
+.deadline-form .primary-button {
+  align-self: end;
+  min-height: 44px;
 }
 
 .upload-actions {
@@ -362,6 +378,7 @@ textarea {
 }
 
 .file-list li,
+.deadline-item,
 .schedule-item,
 .topic-item {
   display: flex;
@@ -378,13 +395,15 @@ textarea {
   display: block;
 }
 
-.file-actions {
+.file-actions,
+.deadline-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .file-list em,
+.deadline-actions em,
 .schedule-item em,
 .status-pill {
   border-radius: 999px;
@@ -403,6 +422,35 @@ textarea {
   background: #f7e8ec;
   color: var(--rose);
   font-size: 0.78rem;
+}
+
+.deadline-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.deadline-item.is-complete {
+  background: #f6f8fb;
+}
+
+.deadline-item.is-complete strong,
+.deadline-item.is-complete span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.deadline-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  background: #e8eef7;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.deadline-actions button:last-child {
+  background: #f7e8ec;
+  color: var(--rose);
 }
 
 .schedule-list,
@@ -528,7 +576,8 @@ textarea {
   .topbar,
   .panel-header,
   .metric-row,
-  .setup-form {
+  .setup-form,
+  .deadline-form {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
@@ -542,12 +591,14 @@ textarea {
   }
 
   .file-list li,
+  .deadline-item,
   .schedule-item {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .upload-actions {
+  .upload-actions,
+  .deadline-actions {
     flex-direction: column;
   }
 }

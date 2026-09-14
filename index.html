@@ -20,12 +20,13 @@
         <nav class="nav-list" aria-label="Primary">
           <a class="active" href="#planner">Planner</a>
           <a href="#materials">Materials</a>
+          <a href="#deadlines">Deadlines</a>
           <a href="#quiz">Quiz</a>
           <a href="#progress">Progress</a>
         </nav>
 
         <section class="mini-panel">
-          <p class="label">Next exam</p>
+          <p class="label">Next deadline</p>
           <strong id="nextExamCourse">Data Structures</strong>
           <span id="nextExamDate">Oct 18 at 9:00 AM</span>
           <span id="examCountdown">34 days to review</span>
@@ -60,6 +61,10 @@
               <div>
                 <strong id="quizItemCount">12</strong>
                 <span>quiz items</span>
+              </div>
+              <div>
+                <strong id="deadlineCount">3</strong>
+                <span>deadlines</span>
               </div>
             </div>
           </article>
@@ -117,6 +122,41 @@
               <span class="status-pill" id="planStatus">Balanced</span>
             </div>
             <div class="schedule-list" id="scheduleList"></div>
+          </article>
+
+          <article class="panel deadline-panel" id="deadlines">
+            <div class="panel-header">
+              <div>
+                <p class="label">Deadlines</p>
+                <h3>Assignments & exams</h3>
+              </div>
+            </div>
+            <form class="deadline-form" id="deadlineForm">
+              <label>
+                Title
+                <input id="deadlineTitle" name="deadlineTitle" type="text" placeholder="Assignment 4" required />
+              </label>
+              <label>
+                Type
+                <select id="deadlineType" name="deadlineType">
+                  <option>Assignment</option>
+                  <option>Quiz</option>
+                  <option>Exam</option>
+                  <option>Project</option>
+                </select>
+              </label>
+              <label>
+                Due date
+                <input id="deadlineDate" name="deadlineDate" type="date" required />
+              </label>
+              <label>
+                Topic
+                <input id="deadlineTopic" name="deadlineTopic" type="text" placeholder="Graph traversal" />
+              </label>
+              <button class="primary-button" type="submit">Add deadline</button>
+            </form>
+            <p class="empty-state" id="emptyDeadlines">No deadlines yet. Add an assignment, quiz, project, or exam date.</p>
+            <div class="deadline-list" id="deadlineList"></div>
           </article>
 
           <article class="panel quiz-panel" id="quiz">
