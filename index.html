@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Study Planner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <div>
+            <p class="eyebrow">Portfolio concept</p>
+            <h1>AI Study Planner</h1>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Primary">
+          <a class="active" href="#planner">Planner</a>
+          <a href="#materials">Materials</a>
+          <a href="#quiz">Quiz</a>
+          <a href="#progress">Progress</a>
+        </nav>
+
+        <section class="mini-panel">
+          <p class="label">Next exam</p>
+          <strong>Data Structures</strong>
+          <span>Oct 18 at 9:00 AM</span>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Fall semester</p>
+            <h2>Turn course chaos into a study plan.</h2>
+          </div>
+          <button class="primary-button" type="button" id="generatePlan">Generate plan</button>
+        </header>
+
+        <section class="hero-grid" id="planner">
+          <article class="panel intro-panel">
+            <p class="label">Today</p>
+            <h3>3 focused sessions</h3>
+            <p>
+              The planner balances deadlines, weak topics, and spaced review so students know exactly what to work on next.
+            </p>
+            <div class="metric-row">
+              <div>
+                <strong>8</strong>
+                <span>materials</span>
+              </div>
+              <div>
+                <strong>4</strong>
+                <span>weak topics</span>
+              </div>
+              <div>
+                <strong>12</strong>
+                <span>quiz items</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel upload-panel" id="materials">
+            <div class="panel-header">
+              <div>
+                <p class="label">Materials</p>
+                <h3>Upload queue</h3>
+              </div>
+              <button class="icon-button" type="button" id="addMaterial" aria-label="Add sample material">+</button>
+            </div>
+            <div class="upload-drop">
+              <span>PDF</span>
+              <p>Syllabi, notes, assignments, and readings</p>
+            </div>
+            <ul class="file-list" id="fileList"></ul>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel schedule-panel">
+            <div class="panel-header">
+              <div>
+                <p class="label">Schedule</p>
+                <h3>This week</h3>
+              </div>
+              <span class="status-pill">Balanced</span>
+            </div>
+            <div class="schedule-list" id="scheduleList"></div>
+          </article>
+
+          <article class="panel quiz-panel" id="quiz">
+            <div class="panel-header">
+              <div>
+                <p class="label">Quiz</p>
+                <h3>Active recall</h3>
+              </div>
+              <button class="secondary-button" type="button" id="nextQuestion">Next</button>
+            </div>
+            <div class="quiz-card">
+              <p id="quizTopic"></p>
+              <h4 id="quizQuestion"></h4>
+              <div class="answer-row">
+                <button type="button">Needs review</button>
+                <button type="button">Got it</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel progress-panel" id="progress">
+            <div class="panel-header">
+              <div>
+                <p class="label">Weak topics</p>
+                <h3>Review priorities</h3>
+              </div>
+            </div>
+            <div id="topicList" class="topic-list"></div>
+          </article>
+
+          <article class="panel answer-panel">
+            <div class="panel-header">
+              <div>
+                <p class="label">Ask materials</p>
+                <h3>Grounded answer</h3>
+              </div>
+            </div>
+            <label for="studyQuestion">Question</label>
+            <textarea id="studyQuestion" rows="4">What should I review before the graph traversal quiz?</textarea>
+            <button class="primary-button" type="button" id="answerQuestion">Answer from materials</button>
+            <div class="answer-box" id="answerBox">
+              Review BFS queue behavior, DFS recursion order, and when each traversal is preferred. Source: Lecture 7 notes and Assignment 3 brief.
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
