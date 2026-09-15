@@ -220,6 +220,14 @@ function formatSessionDate(date) {
   });
 }
 
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function parseExamDate() {
   if (!state.course.examDate) {
     return null;
@@ -439,11 +447,7 @@ function getDateKey(dateValue) {
     return "";
   }
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return formatDateKey(date);
 }
 
 function getStudyStreak() {
@@ -629,6 +633,7 @@ function buildSchedule() {
 
       return withSessionId({
         day: formatSessionDate(sessionDate),
+        dateKey: formatDateKey(sessionDate),
         task: `${action}: ${deadline.title}`,
         time: `${Math.max(25, minutes)} min`,
         focus: topicName,
@@ -651,6 +656,7 @@ function buildSchedule() {
 
     return withSessionId({
       day: formatSessionDate(sessionDate),
+      dateKey: formatDateKey(sessionDate),
       task,
       time: `${Math.max(20, minutes - (index % 3) * 5)} min`,
       focus: topic.name,
@@ -1280,6 +1286,134 @@ function downloadStudyReport() {
   return link.download;
 }
 
+function makeCalendarFileName() {
+  const courseSlug = (state.course.name || "study-plan")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const dateStamp = new Date().toISOString().slice(0, 10);
+
+  return `${courseSlug || "study-plan"}-${dateStamp}-calendar.ics`;
+}
+
+function escapeCalendarText(value) {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\n", "\\n")
+    .replaceAll(",", "\\,")
+    .replaceAll(";", "\\;");
+}
+
+function formatIcsDateTime(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+}
+
+function formatIcsTimestamp(date = new Date()) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function foldIcsLine(line) {
+  const limit = 74;
+
+  if (line.length <= limit) {
+    return line;
+  }
+
+  const chunks = [];
+  let cursor = line;
+
+  while (cursor.length > limit) {
+    chunks.push(cursor.slice(0, limit));
+    cursor = ` ${cursor.slice(limit)}`;
+  }
+
+  chunks.push(cursor);
+
+  return chunks.join("\r\n");
+}
+
+function getSessionStartDate(session, index) {
+  const dateKey = session.dateKey || formatDateKey(new Date(Date.now() + index * 86400000));
+  const start = new Date(`${dateKey}T18:00:00`);
+
+  if (Number.isNaN(start.getTime())) {
+    const fallback = new Date();
+    fallback.setDate(fallback.getDate() + index);
+    fallback.setHours(18, 0, 0, 0);
+    return fallback;
+  }
+
+  return start;
+}
+
+function makeCalendarUid(session, index) {
+  const slug = `${session.id}-${session.dateKey || index}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return `${slug || `study-session-${index + 1}`}@ai-study-planner.local`;
+}
+
+function buildCalendarFile() {
+  const schedule = buildSchedule();
+  const stamp = formatIcsTimestamp();
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "PRODID:-//AI Study Planner//Study Schedule//EN",
+    `X-WR-CALNAME:${escapeCalendarText(`${state.course.name || "Course"} Study Plan`)}`,
+    `X-WR-CALDESC:${escapeCalendarText("Generated locally by AI Study Planner")}`,
+  ];
+
+  schedule.forEach((session, index) => {
+    const start = getSessionStartDate(session, index);
+    const end = new Date(start);
+    end.setMinutes(start.getMinutes() + parseSessionMinutes(session.time));
+
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${makeCalendarUid(session, index)}`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${formatIcsDateTime(start)}`,
+      `DTEND:${formatIcsDateTime(end)}`,
+      `SUMMARY:${escapeCalendarText(session.task)}`,
+      `DESCRIPTION:${escapeCalendarText(`${session.reason || session.focus}\nFocus: ${session.focus}\nDuration: ${session.time}`)}`,
+      `CATEGORIES:Study,${escapeCalendarText(session.focus)}`,
+      "END:VEVENT",
+    );
+  });
+
+  lines.push("END:VCALENDAR");
+
+  return lines.map(foldIcsLine).join("\r\n");
+}
+
+function downloadCalendarFile() {
+  const calendar = buildCalendarFile();
+  const blob = new Blob([calendar], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = makeCalendarFileName();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  return link.download;
+}
+
 function makeBackupFileName() {
   const courseSlug = (state.course.name || "study-planner")
     .toLowerCase()
@@ -1576,6 +1710,11 @@ document.querySelector(".answer-row").addEventListener("click", (event) => {
 document.querySelector("#generatePlan").addEventListener("click", () => {
   state.schedule = buildSchedule();
   renderAll();
+});
+
+document.querySelector("#exportCalendar").addEventListener("click", () => {
+  const fileName = downloadCalendarFile();
+  document.querySelector("#exportStatus").textContent = `Exported ${fileName}`;
 });
 
 document.querySelector("#exportReport").addEventListener("click", () => {

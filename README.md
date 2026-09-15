@@ -15,6 +15,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Study session completion tracking with total minutes studied
 - Progress insights for confidence, streak, completed sessions, and recent activity
 - Spaced-review queue that schedules topics by confidence and review recency
+- Downloadable `.ics` calendar export for generated study sessions
 - Downloadable Markdown study report with plan, deadlines, weak topics, reviews, and activity
 - JSON backup/import controls for moving local planner data between browsers or restoring demos
 - Source-backed quiz cards generated from indexed course materials

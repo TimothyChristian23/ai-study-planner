@@ -24,6 +24,7 @@
 - [x] Add spaced repetition review queue for due topics
 - [x] Export a Markdown study report from local planner data
 - [x] Add JSON backup/import and seeded demo restore controls
+- [x] Export generated study sessions as an `.ics` calendar file
 
 ## Phase 2: Functional MVP
 
