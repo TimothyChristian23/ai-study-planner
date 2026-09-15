@@ -115,6 +115,41 @@ const defaultState = {
 
 let state = loadState();
 
+function normalizeState(rawState = {}) {
+  const merged = { ...structuredClone(defaultState), ...rawState };
+
+  merged.course = { ...structuredClone(defaultState.course), ...(rawState.course || {}) };
+  merged.materials = (merged.materials || []).map((material) => ({
+    ...material,
+    id: material.id || makeId(),
+    name: material.name || "Untitled material",
+    type: material.type || inferType(material.name || ""),
+    status: material.status || "Saved",
+    size: Number(material.size) || 0,
+    uploadedAt: material.uploadedAt || new Date().toISOString(),
+    topics: material.topics?.length ? material.topics : inferTopics(`${material.name || ""} ${material.text || ""}`),
+    text: material.text || "",
+    pageCount: Number(material.pageCount) || 0,
+    indexedPages: Number(material.indexedPages) || 0,
+  }));
+  merged.deadlines = (merged.deadlines || []).map((deadline) => ({
+    ...deadline,
+    id: deadline.id || makeId(),
+    title: deadline.title || "Untitled deadline",
+    type: deadline.type || "Assignment",
+    dueDate: deadline.dueDate || merged.course?.examDate || defaultState.course.examDate,
+    topic: deadline.topic || "General review",
+    completed: Boolean(deadline.completed),
+    createdAt: deadline.createdAt || new Date().toISOString(),
+  }));
+  merged.schedule = Array.isArray(merged.schedule) ? merged.schedule.map(withSessionId) : [];
+  merged.topicProgress = merged.topicProgress || {};
+  merged.completedSessions = merged.completedSessions || {};
+  merged.questionIndex = Number(merged.questionIndex) || 0;
+
+  return merged;
+}
+
 function loadState() {
   const stored = localStorage.getItem(STORAGE_KEY);
 
@@ -124,27 +159,7 @@ function loadState() {
 
   try {
     const parsed = JSON.parse(stored);
-    const merged = { ...structuredClone(defaultState), ...parsed };
-
-    merged.materials = merged.materials.map((material) => ({
-      ...material,
-      topics: material.topics?.length ? material.topics : inferTopics(`${material.name} ${material.text || ""}`),
-      text: material.text || "",
-    }));
-    merged.deadlines = (merged.deadlines || []).map((deadline) => ({
-      ...deadline,
-      id: deadline.id || makeId(),
-      title: deadline.title || "Untitled deadline",
-      type: deadline.type || "Assignment",
-      dueDate: deadline.dueDate || merged.course?.examDate || defaultState.course.examDate,
-      topic: deadline.topic || "General review",
-      completed: Boolean(deadline.completed),
-      createdAt: deadline.createdAt || new Date().toISOString(),
-    }));
-    merged.topicProgress = merged.topicProgress || {};
-    merged.completedSessions = merged.completedSessions || {};
-
-    return merged;
+    return normalizeState(parsed);
   } catch {
     return structuredClone(defaultState);
   }
@@ -1265,6 +1280,51 @@ function downloadStudyReport() {
   return link.download;
 }
 
+function makeBackupFileName() {
+  const courseSlug = (state.course.name || "study-planner")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const dateStamp = new Date().toISOString().slice(0, 10);
+
+  return `${courseSlug || "study-planner"}-${dateStamp}-backup.json`;
+}
+
+function downloadPlannerBackup() {
+  const payload = {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    app: "AI Study Planner",
+    state: normalizeState(state),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = makeBackupFileName();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  return link.download;
+}
+
+async function importPlannerBackup(file) {
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  const importedState = parsed.state || parsed;
+
+  state = normalizeState(importedState);
+  quizAnswerVisible = false;
+  renderAll();
+
+  return parsed.exportedAt || "backup file";
+}
+
 document.querySelector("#browseFiles").addEventListener("click", () => {
   document.querySelector("#fileInput").click();
 });
@@ -1273,9 +1333,39 @@ document.querySelector("#chooseFiles").addEventListener("click", () => {
   document.querySelector("#fileInput").click();
 });
 
+document.querySelector("#exportData").addEventListener("click", () => {
+  const fileName = downloadPlannerBackup();
+  document.querySelector("#uploadStatus").textContent = `Exported ${fileName}`;
+});
+
+document.querySelector("#importData").addEventListener("click", () => {
+  document.querySelector("#backupInput").click();
+});
+
 document.querySelector("#fileInput").addEventListener("change", (event) => {
   addFiles(event.target.files);
   event.target.value = "";
+});
+
+document.querySelector("#backupInput").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  const uploadStatus = document.querySelector("#uploadStatus");
+
+  try {
+    uploadStatus.textContent = "Importing planner backup...";
+    const importedFrom = await importPlannerBackup(file);
+    uploadStatus.textContent = `Imported planner backup from ${importedFrom}.`;
+  } catch (error) {
+    console.error(error);
+    uploadStatus.textContent = "Could not import that backup. Choose a valid AI Study Planner JSON file.";
+  } finally {
+    event.target.value = "";
+  }
 });
 
 document.querySelector("#dropZone").addEventListener("dragover", (event) => {
@@ -1422,14 +1512,25 @@ document.querySelector("#spacedReviewList").addEventListener("click", (event) =>
   renderAll();
 });
 
+document.querySelector("#loadDemo").addEventListener("click", () => {
+  state = normalizeState(structuredClone(defaultState));
+  quizAnswerVisible = false;
+  document.querySelector("#uploadStatus").textContent = "Loaded seeded demo data.";
+  renderAll();
+});
+
 document.querySelector("#clearMaterials").addEventListener("click", () => {
   state = {
     ...structuredClone(defaultState),
     materials: [],
     deadlines: [],
+    schedule: [],
     topicProgress: {},
     completedSessions: {},
+    questionIndex: 0,
   };
+  quizAnswerVisible = false;
+  document.querySelector("#uploadStatus").textContent = "Cleared local planner data.";
   renderAll();
 });
 

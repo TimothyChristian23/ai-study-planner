@@ -23,6 +23,7 @@
 - [x] Show progress insights for confidence, streak, and recent sessions
 - [x] Add spaced repetition review queue for due topics
 - [x] Export a Markdown study report from local planner data
+- [x] Add JSON backup/import and seeded demo restore controls
 
 ## Phase 2: Functional MVP
 
@@ -47,7 +48,7 @@
 
 ## Phase 5: Portfolio Polish
 
-- Add demo data reset
+- Polish seeded demo reset and sample backup workflow
 - Add responsive mobile experience
 - Add screenshots and project write-up
 - Deploy publicly with seeded sample materials
