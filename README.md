@@ -15,6 +15,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Study session completion tracking with total minutes studied
 - Focus session timer with quick notes and progress updates
 - Progress insights for confidence, streak, completed sessions, and recent activity
+- Exam readiness score with risk signals and next-step recommendations
 - Spaced-review queue that schedules topics by confidence and review recency
 - Downloadable `.ics` calendar export for generated study sessions
 - Downloadable Markdown study report with plan, deadlines, weak topics, reviews, and activity

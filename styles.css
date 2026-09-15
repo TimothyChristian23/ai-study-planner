@@ -494,6 +494,103 @@ textarea {
   gap: 10px;
 }
 
+.readiness-score {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.readiness-score > div:first-child {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.readiness-score strong {
+  color: var(--teal);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.readiness-score span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.readiness-meter {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef7;
+}
+
+.readiness-meter span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--teal);
+}
+
+.readiness-factors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readiness-factor {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.readiness-factor span,
+.readiness-factor strong,
+.readiness-factor em {
+  display: block;
+}
+
+.readiness-factor span,
+.readiness-factor em {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.readiness-factor strong {
+  margin: 4px 0;
+  color: var(--blue);
+  font-size: 1.4rem;
+}
+
+.readiness-factor em {
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.readiness-actions {
+  margin-top: 14px;
+}
+
+.readiness-actions h4 {
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.readiness-actions ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.readiness-actions li {
+  color: #334155;
+  line-height: 1.45;
+}
+
 .focus-card {
   display: grid;
   gap: 12px;
@@ -836,6 +933,7 @@ textarea {
   .panel-header,
   .metric-row,
   .progress-summary,
+  .readiness-factors,
   .focus-actions,
   .setup-form,
   .deadline-form {

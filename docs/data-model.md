@@ -188,5 +188,6 @@ This document captures the local data shape used by the static prototype and the
 - The browser prototype stores extracted text in `localStorage`, which is only appropriate for demo use.
 - Local JSON backups wrap this state as `{ schemaVersion, exportedAt, app, state }` so demos can be moved between browsers.
 - Generated schedule items include `dateKey` so the same local plan can drive both the UI and `.ics` calendar export.
+- Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

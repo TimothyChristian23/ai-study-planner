@@ -479,6 +479,10 @@ function formatTimer(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function isSessionComplete(session) {
   return Boolean(state.completedSessions?.[session.id]);
 }
@@ -596,6 +600,105 @@ function getSpacedReviewItems() {
       };
     })
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue || a.score - b.score);
+}
+
+function getReadinessLabel(score) {
+  if (score >= 82) return "Ready";
+  if (score >= 66) return "On track";
+  if (score >= 48) return "Needs focus";
+  return "At risk";
+}
+
+function getDeadlineReadiness(daysUntilDeadline) {
+  if (daysUntilDeadline === null) return 45;
+  if (daysUntilDeadline < 0) return 10;
+  if (daysUntilDeadline <= 2) return 35;
+  if (daysUntilDeadline <= 7) return 55;
+  if (daysUntilDeadline <= 14) return 72;
+  return 86;
+}
+
+function buildReadinessSnapshot() {
+  const schedule = state.schedule.length ? state.schedule : buildSchedule();
+  const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
+  const openDeadlines = getOpenDeadlines();
+  const nextDeadline = openDeadlines[0] || null;
+  const nextDueDays = nextDeadline ? getDaysUntil(nextDeadline.dueDate) : getDaysUntilExam();
+  const completedSessions = schedule.filter(isSessionComplete).length;
+  const planCompletion = schedule.length ? Math.round((completedSessions / schedule.length) * 100) : 0;
+  const avgConfidence = getAverageConfidence();
+  const dueReviews = getSpacedReviewItems().filter((item) => item.status !== "Scheduled");
+  const weakTopics = topics.filter((topic) => topic.score < 60);
+  const urgentWeakTopics = topics.filter((topic) => topic.score < 48);
+  const materialScore = state.materials.length ? clamp(state.materials.length * 22, 45, 100) : 12;
+  const reviewScore = clamp(100 - dueReviews.length * 16 - urgentWeakTopics.length * 8, 10, 100);
+  const score = Math.round(
+    clamp(
+      avgConfidence * 0.38 +
+        planCompletion * 0.22 +
+        getDeadlineReadiness(nextDueDays) * 0.18 +
+        reviewScore * 0.12 +
+        materialScore * 0.1,
+      0,
+      100,
+    ),
+  );
+  const readinessLabel = getReadinessLabel(score);
+  const deadlineText = nextDeadline
+    ? `${nextDeadline.title} due ${formatDueDate(nextDeadline.dueDate)}`
+    : state.course.examDate
+      ? `Exam on ${formatDueDate(state.course.examDate)}`
+      : "Add a deadline";
+  const recommendations = [];
+
+  if (!state.materials.length) {
+    recommendations.push("Upload a syllabus, notes, or assignment so the planner can ground quizzes and answers.");
+  }
+
+  if (!openDeadlines.length && !state.course.examDate) {
+    recommendations.push("Add the next exam or assignment date to make the schedule deadline-aware.");
+  }
+
+  if (urgentWeakTopics.length) {
+    recommendations.push(`Run active recall on ${urgentWeakTopics[0].name}; it is below 48% confidence.`);
+  } else if (weakTopics.length) {
+    recommendations.push(`Review ${weakTopics[0].name} before moving to lower-priority topics.`);
+  }
+
+  if (dueReviews.length) {
+    recommendations.push(`Clear the spaced-review item for ${dueReviews[0].name}.`);
+  }
+
+  const nextSession = schedule.find((session) => !isSessionComplete(session));
+
+  if (nextSession) {
+    recommendations.push(`Start the focus timer for ${nextSession.task}.`);
+  }
+
+  if (!recommendations.length) {
+    recommendations.push("Keep the plan warm with one short recall session today.");
+  }
+
+  return {
+    score,
+    readinessLabel,
+    deadlineText,
+    factors: [
+      { label: "Confidence", value: `${avgConfidence}%`, detail: `${weakTopics.length} weak topic${weakTopics.length === 1 ? "" : "s"}` },
+      { label: "Plan", value: `${planCompletion}%`, detail: `${completedSessions} of ${schedule.length} sessions done` },
+      {
+        label: "Deadline",
+        value: nextDueDays === null ? "Unset" : nextDueDays < 0 ? "Past due" : `${nextDueDays}d`,
+        detail: deadlineText,
+      },
+      {
+        label: "Reviews",
+        value: dueReviews.length,
+        detail: dueReviews.length ? "Due or soon" : "No urgent reviews",
+      },
+    ],
+    recommendations: recommendations.slice(0, 4),
+  };
 }
 
 function formatCompletedAt(dateValue) {
@@ -1251,6 +1354,32 @@ function renderProgressInsights() {
     : `<p class="empty-state">No completed sessions yet.</p>`;
 }
 
+function renderReadinessInsights() {
+  const snapshot = buildReadinessSnapshot();
+  const meter = document.querySelector("#readinessMeter");
+  const meterBar = meter.querySelector("span");
+
+  document.querySelector("#readinessScore").textContent = `${snapshot.score}%`;
+  document.querySelector("#readinessStatus").textContent = snapshot.readinessLabel;
+  document.querySelector("#readinessDeadline").textContent = snapshot.deadlineText;
+  meter.setAttribute("aria-valuenow", snapshot.score);
+  meterBar.style.width = `${snapshot.score}%`;
+  document.querySelector("#readinessFactors").innerHTML = snapshot.factors
+    .map(
+      (factor) => `
+        <div class="readiness-factor">
+          <span>${escapeHTML(factor.label)}</span>
+          <strong>${escapeHTML(factor.value)}</strong>
+          <em>${escapeHTML(factor.detail)}</em>
+        </div>
+      `,
+    )
+    .join("");
+  document.querySelector("#readinessActions").innerHTML = snapshot.recommendations
+    .map((recommendation) => `<li>${escapeHTML(recommendation)}</li>`)
+    .join("");
+}
+
 function renderQuestion() {
   const questions = buildQuestions();
   state.questionIndex %= questions.length;
@@ -1308,6 +1437,7 @@ function renderAll() {
   renderFocusSession();
   renderTopics();
   renderProgressInsights();
+  renderReadinessInsights();
   renderQuestion();
   renderMetrics();
   syncFocusTicker();
@@ -1510,6 +1640,7 @@ function buildStudyReport() {
   const completedSessions = getCompletedSessions().sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
   );
+  const readiness = buildReadinessSnapshot();
   const generatedAt = new Date().toLocaleString();
 
   return [
@@ -1528,6 +1659,17 @@ function buildStudyReport() {
     `- Completed study minutes: ${getCompletedStudyMinutes()}`,
     `- Average confidence: ${getAverageConfidence()}%`,
     `- Study streak: ${getStudyStreak()} day(s)`,
+    `- Readiness: ${readiness.score}% (${readiness.readinessLabel})`,
+    "",
+    "## Readiness",
+    "",
+    `Next deadline: ${readiness.deadlineText}`,
+    "",
+    ...readiness.factors.map((factor) => `- ${factor.label}: ${factor.value} - ${factor.detail}`),
+    "",
+    "### Next Best Moves",
+    "",
+    ...readiness.recommendations.map((recommendation) => `- ${recommendation}`),
     "",
     "## Current Study Plan",
     "",

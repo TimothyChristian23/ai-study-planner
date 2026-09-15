@@ -19,6 +19,7 @@
 
         <nav class="nav-list" aria-label="Primary">
           <a class="active" href="#planner">Planner</a>
+          <a href="#readiness">Readiness</a>
           <a href="#materials">Materials</a>
           <a href="#deadlines">Deadlines</a>
           <a href="#focus">Focus</a>
@@ -136,6 +137,38 @@
               <span class="status-pill" id="planStatus">Balanced</span>
             </div>
             <div class="schedule-list" id="scheduleList"></div>
+          </article>
+
+          <article class="panel readiness-panel" id="readiness">
+            <div class="panel-header">
+              <div>
+                <p class="label">Readiness</p>
+                <h3>Exam outlook</h3>
+              </div>
+              <span class="status-pill" id="readinessStatus">Calculating</span>
+            </div>
+            <div class="readiness-score">
+              <div>
+                <strong id="readinessScore">0%</strong>
+                <span id="readinessDeadline">Add a deadline</span>
+              </div>
+              <div
+                class="readiness-meter"
+                role="meter"
+                aria-label="Readiness score"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+                id="readinessMeter"
+              >
+                <span></span>
+              </div>
+            </div>
+            <div class="readiness-factors" id="readinessFactors"></div>
+            <div class="readiness-actions">
+              <h4>Next best moves</h4>
+              <ul id="readinessActions"></ul>
+            </div>
           </article>
 
           <article class="panel focus-panel" id="focus">
