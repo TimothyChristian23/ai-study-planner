@@ -36,6 +36,33 @@ const topicPatterns = [
   { name: "Assignments", terms: ["assignment", "project", "homework", "submission"] },
 ];
 
+const monthLookup = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+};
+
 const sampleMaterials = [
   {
     id: "sample-syllabus",
@@ -108,6 +135,7 @@ const defaultState = {
   },
   materials: sampleMaterials,
   deadlines: sampleDeadlines,
+  suggestedDeadlines: [],
   schedule: [],
   topicProgress: {},
   completedSessions: {},
@@ -149,6 +177,19 @@ function normalizeState(rawState = {}) {
     topic: deadline.topic || "General review",
     completed: Boolean(deadline.completed),
     createdAt: deadline.createdAt || new Date().toISOString(),
+  }));
+  merged.suggestedDeadlines = (merged.suggestedDeadlines || []).map((suggestion) => ({
+    ...suggestion,
+    id: suggestion.id || makeId(),
+    title: suggestion.title || "Suggested deadline",
+    type: suggestion.type || "Assignment",
+    dueDate: suggestion.dueDate || merged.course?.examDate || defaultState.course.examDate,
+    topic: suggestion.topic || "General review",
+    confidence: suggestion.confidence || "Medium",
+    excerpt: suggestion.excerpt || "",
+    sourceMaterialId: suggestion.sourceMaterialId || "",
+    sourceMaterialName: suggestion.sourceMaterialName || "Uploaded material",
+    createdAt: suggestion.createdAt || new Date().toISOString(),
   }));
   merged.schedule = Array.isArray(merged.schedule) ? merged.schedule.map(withSessionId) : [];
   merged.topicProgress = merged.topicProgress || {};
@@ -319,6 +360,140 @@ function formatDueDate(dateValue) {
     month: "short",
     day: "numeric",
   });
+}
+
+function getPlanningYear() {
+  const examDate = parseExamDate();
+
+  if (examDate) {
+    return examDate.getFullYear();
+  }
+
+  return new Date().getFullYear();
+}
+
+function toDateKey(year, monthIndex, day) {
+  const date = new Date(year, monthIndex, day);
+
+  if (date.getFullYear() !== year || date.getMonth() !== monthIndex || date.getDate() !== day) {
+    return "";
+  }
+
+  return formatDateKey(date);
+}
+
+function parseMaterialDate(text) {
+  const monthDateMatch = text.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:,\s*(\d{4}))?\b/i,
+  );
+
+  if (monthDateMatch) {
+    const monthIndex = monthLookup[monthDateMatch[1].toLowerCase().replace(".", "")];
+    const day = Number(monthDateMatch[2]);
+    const year = Number(monthDateMatch[3]) || getPlanningYear();
+
+    return toDateKey(year, monthIndex, day);
+  }
+
+  const numericDateMatch = text.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+
+  if (numericDateMatch) {
+    const monthIndex = Number(numericDateMatch[1]) - 1;
+    const day = Number(numericDateMatch[2]);
+    const yearPart = numericDateMatch[3];
+    const year = yearPart
+      ? Number(yearPart.length === 2 ? `20${yearPart}` : yearPart)
+      : getPlanningYear();
+
+    return toDateKey(year, monthIndex, day);
+  }
+
+  return "";
+}
+
+function inferDeadlineType(text) {
+  const lower = text.toLowerCase();
+
+  if (lower.includes("midterm") || lower.includes("final") || lower.includes("exam")) return "Exam";
+  if (lower.includes("quiz")) return "Quiz";
+  if (lower.includes("project")) return "Project";
+  return "Assignment";
+}
+
+function titleCase(value) {
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+}
+
+function inferDeadlineTitle(text, type) {
+  const titleMatch = text.match(
+    /\b((?:assignment|homework|problem set|project|quiz|midterm|final|exam)(?:\s+(?:exam|quiz|project|assignment))?(?:\s*(?:#|no\.?)?\s*[a-z0-9-]+)?)\b/i,
+  );
+
+  if (titleMatch) {
+    return titleCase(titleMatch[1].replace(/\s+/g, " ").trim());
+  }
+
+  return `${type} deadline`;
+}
+
+function getSuggestionKey(item) {
+  return `${item.type}|${item.dueDate}|${item.title}`.toLowerCase();
+}
+
+function isDuplicateDeadlineSuggestion(suggestion, suggestions = state.suggestedDeadlines) {
+  const suggestionKey = getSuggestionKey(suggestion);
+  const existingDeadline = state.deadlines.some((deadline) => getSuggestionKey(deadline) === suggestionKey);
+  const existingSuggestion = suggestions.some((item) => getSuggestionKey(item) === suggestionKey);
+
+  return existingDeadline || existingSuggestion;
+}
+
+function extractDeadlineSuggestions(material) {
+  if (!material.text) {
+    return [];
+  }
+
+  const lines = material.text
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((line) => normalizeWhitespace(line))
+    .filter((line) => line.length >= 12 && line.length <= 220)
+    .filter((line) => /(assignment|homework|problem set|project|quiz|exam|midterm|final|deadline|due)/i.test(line))
+    .slice(0, 80);
+  const suggestions = [];
+
+  lines.forEach((line) => {
+    const dueDate = parseMaterialDate(line);
+
+    if (!dueDate) {
+      return;
+    }
+
+    const type = inferDeadlineType(line);
+    const title = inferDeadlineTitle(line, type);
+    const suggestion = {
+      id: makeId(),
+      title,
+      type,
+      dueDate,
+      topic: inferTopics(`${line} ${material.name}`)[0],
+      confidence: /\b(due|deadline|exam|quiz|final|midterm)\b/i.test(line) ? "High" : "Medium",
+      excerpt: line,
+      sourceMaterialId: material.id,
+      sourceMaterialName: material.name,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!isDuplicateDeadlineSuggestion(suggestion, [...state.suggestedDeadlines, ...suggestions])) {
+      suggestions.push(suggestion);
+    }
+  });
+
+  return suggestions.slice(0, 5);
 }
 
 function getOpenDeadlines() {
@@ -1139,6 +1314,8 @@ function renderMaterials() {
 function renderDeadlines() {
   const list = document.querySelector("#deadlineList");
   const empty = document.querySelector("#emptyDeadlines");
+  const suggestionPanel = document.querySelector("#suggestionPanel");
+  const suggestionList = document.querySelector("#suggestionList");
   const sortedDeadlines = [...state.deadlines].sort((a, b) => {
     if (a.completed !== b.completed) {
       return a.completed ? 1 : -1;
@@ -1150,7 +1327,28 @@ function renderDeadlines() {
     return aDate - bDate || a.title.localeCompare(b.title);
   });
 
-  empty.hidden = sortedDeadlines.length > 0;
+  empty.hidden = sortedDeadlines.length > 0 || state.suggestedDeadlines.length > 0;
+  suggestionPanel.hidden = !state.suggestedDeadlines.length;
+  document.querySelector("#suggestionCount").textContent =
+    `${state.suggestedDeadlines.length} suggestion${state.suggestedDeadlines.length === 1 ? "" : "s"}`;
+  suggestionList.innerHTML = state.suggestedDeadlines
+    .map(
+      (suggestion) => `
+        <div class="suggestion-item">
+          <div>
+            <strong>${escapeHTML(suggestion.title)}</strong>
+            <span>${escapeHTML(suggestion.type)} - ${formatDueDate(suggestion.dueDate)} - ${escapeHTML(suggestion.topic)}</span>
+            <p>${escapeHTML(suggestion.excerpt || suggestion.sourceMaterialName)}</p>
+          </div>
+          <div class="suggestion-actions">
+            <em>${escapeHTML(suggestion.confidence)} match</em>
+            <button type="button" data-accept-suggestion="${escapeHTML(suggestion.id)}">Add</button>
+            <button type="button" data-dismiss-suggestion="${escapeHTML(suggestion.id)}">Dismiss</button>
+          </div>
+        </div>
+      `,
+    )
+    .join("");
   list.innerHTML = sortedDeadlines
     .map((deadline) => {
       const daysLeft = getDaysUntil(deadline.dueDate);
@@ -1456,8 +1654,14 @@ async function addFiles(files) {
   try {
     uploadStatus.textContent = `Indexing ${incoming.length} file${incoming.length === 1 ? "" : "s"}...`;
     const newMaterials = await Promise.all(incoming.map(materialFromFile));
+    const newSuggestions = newMaterials.flatMap(extractDeadlineSuggestions);
     state.materials = [...newMaterials, ...state.materials];
-    uploadStatus.textContent = `Added ${newMaterials.length} material${newMaterials.length === 1 ? "" : "s"}.`;
+    state.suggestedDeadlines = [...newSuggestions, ...state.suggestedDeadlines];
+    uploadStatus.textContent =
+      `Added ${newMaterials.length} material${newMaterials.length === 1 ? "" : "s"}.` +
+      (newSuggestions.length
+        ? ` Found ${newSuggestions.length} deadline suggestion${newSuggestions.length === 1 ? "" : "s"}.`
+        : "");
     renderAll();
   } catch (error) {
     console.error(error);
@@ -1635,6 +1839,7 @@ function makeReportFileName() {
 function buildStudyReport() {
   const schedule = state.schedule.length ? state.schedule : buildSchedule();
   const openDeadlines = getOpenDeadlines();
+  const suggestedDeadlines = state.suggestedDeadlines || [];
   const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
   const spacedReviews = getSpacedReviewItems();
   const completedSessions = getCompletedSessions().sort(
@@ -1689,6 +1894,15 @@ function buildStudyReport() {
       (deadline) =>
         `- ${deadline.title} (${deadline.type}) - due ${formatDueDate(deadline.dueDate)} - ${deadline.topic}`,
       "No open deadlines.",
+    ),
+    "",
+    "## Suggested Deadlines",
+    "",
+    ...formatReportLineItems(
+      suggestedDeadlines,
+      (suggestion) =>
+        `- ${suggestion.title} (${suggestion.type}) - ${formatDueDate(suggestion.dueDate)} - ${suggestion.topic} - ${suggestion.confidence} match from ${suggestion.sourceMaterialName}`,
+      "No pending suggestions.",
     ),
     "",
     "## Weak Topics",
@@ -1996,6 +2210,9 @@ document.querySelector("#fileList").addEventListener("click", (event) => {
   }
 
   state.materials = state.materials.filter((material) => material.id !== removeButton.dataset.removeId);
+  state.suggestedDeadlines = state.suggestedDeadlines.filter(
+    (suggestion) => suggestion.sourceMaterialId !== removeButton.dataset.removeId,
+  );
   renderAll();
 });
 
@@ -2022,18 +2239,20 @@ document.querySelector("#deadlineForm").addEventListener("submit", (event) => {
     return;
   }
 
-  state.deadlines = [
-    ...state.deadlines,
-    {
-      id: makeId(),
-      title,
-      type: typeInput.value,
-      dueDate: dueDateInput.value,
-      topic,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  const deadline = {
+    id: makeId(),
+    title,
+    type: typeInput.value,
+    dueDate: dueDateInput.value,
+    topic,
+    completed: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  state.deadlines = [...state.deadlines, deadline];
+  state.suggestedDeadlines = state.suggestedDeadlines.filter(
+    (suggestion) => getSuggestionKey(suggestion) !== getSuggestionKey(deadline),
+  );
 
   titleInput.value = "";
   topicInput.value = "";
@@ -2057,6 +2276,41 @@ document.querySelector("#deadlineList").addEventListener("click", (event) => {
     state.deadlines = state.deadlines.filter((deadline) => deadline.id !== removeButton.dataset.removeDeadline);
     renderAll();
   }
+});
+
+document.querySelector("#suggestionList").addEventListener("click", (event) => {
+  const acceptButton = event.target.closest("[data-accept-suggestion]");
+  const dismissButton = event.target.closest("[data-dismiss-suggestion]");
+
+  if (!acceptButton && !dismissButton) {
+    return;
+  }
+
+  const suggestionId = acceptButton?.dataset.acceptSuggestion || dismissButton?.dataset.dismissSuggestion;
+  const suggestion = state.suggestedDeadlines.find((item) => item.id === suggestionId);
+
+  if (!suggestion) {
+    return;
+  }
+
+  if (acceptButton) {
+    state.deadlines = [
+      ...state.deadlines,
+      {
+        id: makeId(),
+        title: suggestion.title,
+        type: suggestion.type,
+        dueDate: suggestion.dueDate,
+        topic: suggestion.topic,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        sourceMaterialName: suggestion.sourceMaterialName,
+      },
+    ];
+  }
+
+  state.suggestedDeadlines = state.suggestedDeadlines.filter((item) => item.id !== suggestionId);
+  renderAll();
 });
 
 document.querySelector("#scheduleList").addEventListener("click", (event) => {
@@ -2131,6 +2385,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
     ...structuredClone(defaultState),
     materials: [],
     deadlines: [],
+    suggestedDeadlines: [],
     schedule: [],
     topicProgress: {},
     completedSessions: {},

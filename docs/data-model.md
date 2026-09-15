@@ -36,6 +36,20 @@ This document captures the local data shape used by the static prototype and the
       createdAt: "2026-09-14T12:10:00.000Z"
     }
   ],
+  suggestedDeadlines: [
+    {
+      id: "uuid",
+      title: "Assignment 4",
+      type: "Assignment",
+      dueDate: "2026-10-02",
+      topic: "Graph traversal",
+      confidence: "High",
+      excerpt: "Assignment 4 is due October 2 before class.",
+      sourceMaterialId: "uuid",
+      sourceMaterialName: "Syllabus.pdf",
+      createdAt: "2026-09-14T12:12:00.000Z"
+    }
+  ],
   topicProgress: {
     "Graph traversal": {
       confidence: 58,
@@ -189,5 +203,6 @@ This document captures the local data shape used by the static prototype and the
 - Local JSON backups wrap this state as `{ schemaVersion, exportedAt, app, state }` so demos can be moved between browsers.
 - Generated schedule items include `dateKey` so the same local plan can drive both the UI and `.ics` calendar export.
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
+- Suggested deadlines are extracted locally from uploaded material text and kept separate until the student accepts them.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

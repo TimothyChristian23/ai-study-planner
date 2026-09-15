@@ -185,6 +185,7 @@ h4 {
 .answer-row button,
 .file-actions button,
 .deadline-actions button,
+.suggestion-actions button,
 .schedule-actions button,
 .focus-actions button,
 .spaced-review-item button {
@@ -405,6 +406,7 @@ textarea {
 
 .file-list li,
 .deadline-item,
+.suggestion-item,
 .schedule-item,
 .topic-item {
   display: flex;
@@ -423,6 +425,7 @@ textarea {
 
 .file-actions,
 .deadline-actions,
+.suggestion-actions,
 .schedule-actions {
   display: flex;
   align-items: center;
@@ -431,6 +434,7 @@ textarea {
 
 .file-list em,
 .deadline-actions em,
+.suggestion-actions em,
 .schedule-actions em,
 .status-pill {
   border-radius: 999px;
@@ -457,6 +461,60 @@ textarea {
   margin-top: 16px;
 }
 
+.suggestion-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6f8fc;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.suggestion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.suggestion-heading h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.suggestion-heading span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+
+.suggestion-item {
+  background: #fff;
+}
+
+.suggestion-item strong,
+.suggestion-item span,
+.suggestion-item p {
+  display: block;
+}
+
+.suggestion-item span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.suggestion-item p {
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
 .deadline-item.is-complete {
   background: #f6f8fb;
 }
@@ -476,6 +534,19 @@ textarea {
 }
 
 .deadline-actions button:last-child {
+  background: #f7e8ec;
+  color: var(--rose);
+}
+
+.suggestion-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  background: #dff5f1;
+  color: var(--teal);
+  font-size: 0.78rem;
+}
+
+.suggestion-actions button:last-child {
   background: #f7e8ec;
   color: var(--rose);
 }
@@ -953,6 +1024,7 @@ textarea {
 
   .file-list li,
   .deadline-item,
+  .suggestion-item,
   .spaced-review-item,
   .session-log-item,
   .schedule-item {
@@ -962,6 +1034,7 @@ textarea {
 
   .upload-actions,
   .deadline-actions,
+  .suggestion-actions,
   .schedule-actions {
     flex-direction: column;
   }
