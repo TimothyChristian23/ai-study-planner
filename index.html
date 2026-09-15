@@ -21,6 +21,7 @@
           <a class="active" href="#planner">Planner</a>
           <a href="#materials">Materials</a>
           <a href="#deadlines">Deadlines</a>
+          <a href="#focus">Focus</a>
           <a href="#quiz">Quiz</a>
           <a href="#progress">Progress</a>
         </nav>
@@ -135,6 +136,34 @@
               <span class="status-pill" id="planStatus">Balanced</span>
             </div>
             <div class="schedule-list" id="scheduleList"></div>
+          </article>
+
+          <article class="panel focus-panel" id="focus">
+            <div class="panel-header">
+              <div>
+                <p class="label">Focus</p>
+                <h3>Study session</h3>
+              </div>
+              <span class="status-pill" id="focusStatus">Ready</span>
+            </div>
+            <div class="focus-card">
+              <label for="focusSessionSelect">Session</label>
+              <select id="focusSessionSelect"></select>
+              <div class="focus-current">
+                <strong id="focusTask">Generate a plan</strong>
+                <span id="focusMeta">No session selected</span>
+              </div>
+              <div class="focus-timer" id="focusTimer">00:00</div>
+              <div class="focus-actions">
+                <button class="primary-button" type="button" id="focusStart">Start</button>
+                <button class="secondary-button" type="button" id="focusPause">Pause</button>
+                <button class="secondary-button" type="button" id="focusReset">Reset</button>
+                <button class="secondary-button" type="button" id="focusComplete">Complete</button>
+              </div>
+              <label for="focusNotes">Notes</label>
+              <textarea id="focusNotes" rows="3"></textarea>
+              <p class="focus-status-text" id="focusStatusText" aria-live="polite"></p>
+            </div>
           </article>
 
           <article class="panel deadline-panel" id="deadlines">

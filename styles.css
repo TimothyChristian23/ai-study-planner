@@ -186,11 +186,17 @@ h4 {
 .file-actions button,
 .deadline-actions button,
 .schedule-actions button,
+.focus-actions button,
 .spaced-review-item button {
   border: 0;
   border-radius: 8px;
   min-height: 42px;
   font-weight: 800;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .primary-button {
@@ -336,6 +342,7 @@ h4 {
 
 .setup-form label,
 .deadline-form label,
+.focus-panel label,
 .answer-panel label {
   color: var(--muted);
   font-size: 0.84rem;
@@ -345,6 +352,7 @@ h4 {
 .setup-form input,
 .deadline-form input,
 .deadline-form select,
+.focus-panel select,
 textarea {
   width: 100%;
   margin-top: 6px;
@@ -486,6 +494,55 @@ textarea {
   gap: 10px;
 }
 
+.focus-card {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-current {
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #f3f7ff;
+  padding: 12px;
+}
+
+.focus-current strong,
+.focus-current span {
+  display: block;
+}
+
+.focus-current span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.focus-timer {
+  border-radius: 8px;
+  background: var(--nav);
+  color: #fff;
+  padding: 20px;
+  text-align: center;
+  font-size: 3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.focus-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.focus-status-text {
+  min-height: 22px;
+  margin: 0;
+  color: var(--teal);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .progress-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -586,6 +643,13 @@ textarea {
 .session-log-item span {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.session-log-item p {
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 8px 0 0;
 }
 
 .session-log-item em {
@@ -772,6 +836,7 @@ textarea {
   .panel-header,
   .metric-row,
   .progress-summary,
+  .focus-actions,
   .setup-form,
   .deadline-form {
     grid-template-columns: 1fr;

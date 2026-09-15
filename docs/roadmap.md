@@ -19,6 +19,7 @@
 - [x] Add local passage retrieval for material-grounded answers
 - [x] Show grounding confidence and cited source excerpts
 - [x] Track completed study sessions and minutes studied
+- [x] Add focus session timer with notes
 - [x] Feed completed sessions back into topic confidence
 - [x] Show progress insights for confidence, streak, and recent sessions
 - [x] Add spaced repetition review queue for due topics

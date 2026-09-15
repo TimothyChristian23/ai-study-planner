@@ -61,8 +61,16 @@ This document captures the local data shape used by the static prototype and the
       task: "Repair weak spot: Graph traversal",
       focus: "Graph traversal",
       minutes: 45,
-      completedAt: "2026-09-14T19:05:00.000Z"
+      completedAt: "2026-09-14T19:05:00.000Z",
+      notes: "Reworked BFS queue examples."
     }
+  },
+  focusSession: {
+    selectedSessionId: "Sep 15|Repair weak spot: Graph traversal|Graph traversal",
+    secondsRemaining: 1800,
+    isRunning: false,
+    startedAt: null,
+    notes: "Reworked BFS queue examples."
   },
   questionIndex: 0
 }
@@ -148,6 +156,7 @@ This document captures the local data shape used by the static prototype and the
 - `course_id`
 - `focus_topic`
 - `minutes`
+- `notes`
 - `completed_at`
 
 ### quiz_items

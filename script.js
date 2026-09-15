@@ -7,6 +7,7 @@ const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
+let focusTimerId = null;
 
 const stopWords = new Set([
   "about",
@@ -110,6 +111,13 @@ const defaultState = {
   schedule: [],
   topicProgress: {},
   completedSessions: {},
+  focusSession: {
+    selectedSessionId: "",
+    secondsRemaining: null,
+    isRunning: false,
+    startedAt: null,
+    notes: "",
+  },
   questionIndex: 0,
 };
 
@@ -145,6 +153,36 @@ function normalizeState(rawState = {}) {
   merged.schedule = Array.isArray(merged.schedule) ? merged.schedule.map(withSessionId) : [];
   merged.topicProgress = merged.topicProgress || {};
   merged.completedSessions = merged.completedSessions || {};
+  const rawFocusSession = rawState.focusSession || {};
+  const rawSecondsRemaining = Number(rawFocusSession.secondsRemaining);
+  merged.focusSession = {
+    ...structuredClone(defaultState.focusSession),
+    ...rawFocusSession,
+    selectedSessionId: rawFocusSession.selectedSessionId || "",
+    secondsRemaining: Number.isFinite(rawSecondsRemaining) ? Math.max(0, Math.round(rawSecondsRemaining)) : null,
+    isRunning: Boolean(rawFocusSession.isRunning),
+    startedAt: rawFocusSession.startedAt || null,
+    notes: rawFocusSession.notes || "",
+  };
+
+  if (merged.focusSession.isRunning) {
+    const startedAt = new Date(merged.focusSession.startedAt).getTime();
+
+    if (Number.isFinite(startedAt) && merged.focusSession.secondsRemaining !== null) {
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      merged.focusSession.secondsRemaining = Math.max(0, merged.focusSession.secondsRemaining - elapsedSeconds);
+      merged.focusSession.startedAt = new Date().toISOString();
+    } else {
+      merged.focusSession.isRunning = false;
+      merged.focusSession.startedAt = null;
+    }
+
+    if (merged.focusSession.secondsRemaining <= 0) {
+      merged.focusSession.isRunning = false;
+      merged.focusSession.startedAt = null;
+    }
+  }
+
   merged.questionIndex = Number(merged.questionIndex) || 0;
 
   return merged;
@@ -428,8 +466,49 @@ function parseSessionMinutes(time) {
   return Number.parseInt(time, 10) || Number(state.course.dailyMinutes) || 45;
 }
 
+function getFocusSessionState() {
+  state.focusSession ||= structuredClone(defaultState.focusSession);
+  return state.focusSession;
+}
+
+function formatTimer(seconds) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 function isSessionComplete(session) {
   return Boolean(state.completedSessions?.[session.id]);
+}
+
+function completeStudySession(session, minutes = parseSessionMinutes(session.time), notes = "") {
+  const progress = ensureTopicProgress(session.focus);
+  const completedAt = new Date().toISOString();
+
+  state.completedSessions[session.id] = {
+    id: session.id,
+    task: session.task,
+    focus: session.focus,
+    minutes,
+    completedAt,
+    notes: notes.trim(),
+  };
+  progress.studySessions = (progress.studySessions || 0) + 1;
+  progress.confidence = Math.min(100, progress.confidence + 4);
+  progress.lastReviewedAt = completedAt;
+}
+
+function reopenStudySession(session) {
+  if (!state.completedSessions[session.id]) {
+    return;
+  }
+
+  const progress = ensureTopicProgress(session.focus);
+  delete state.completedSessions[session.id];
+  progress.studySessions = Math.max(0, (progress.studySessions || 0) - 1);
+  progress.confidence = Math.max(5, progress.confidence - 4);
 }
 
 function getCompletedSessions() {
@@ -665,6 +744,184 @@ function buildSchedule() {
   });
 }
 
+function getFocusCandidateSessions() {
+  if (!state.schedule.length) {
+    state.schedule = buildSchedule();
+  }
+
+  return state.schedule;
+}
+
+function resetFocusSessionForSession(session, keepNotes = false) {
+  const focus = getFocusSessionState();
+
+  focus.selectedSessionId = session?.id || "";
+  focus.secondsRemaining = session ? parseSessionMinutes(session.time) * 60 : 0;
+  focus.isRunning = false;
+  focus.startedAt = null;
+
+  if (!keepNotes) {
+    focus.notes = "";
+  }
+}
+
+function getCurrentFocusSession() {
+  const sessions = getFocusCandidateSessions();
+  const focus = getFocusSessionState();
+
+  if (!sessions.length) {
+    resetFocusSessionForSession(null);
+    return null;
+  }
+
+  const incompleteSessions = sessions.filter((session) => !isSessionComplete(session));
+  const selectableSessions = incompleteSessions.length ? incompleteSessions : sessions;
+  const selectedSession = selectableSessions.find((session) => session.id === focus.selectedSessionId);
+  const currentSession = selectedSession || selectableSessions[0];
+
+  if (focus.selectedSessionId !== currentSession.id) {
+    resetFocusSessionForSession(currentSession);
+  }
+
+  if (focus.secondsRemaining === null) {
+    focus.secondsRemaining = parseSessionMinutes(currentSession.time) * 60;
+  }
+
+  return currentSession;
+}
+
+function getFocusSeconds(session) {
+  if (!session) {
+    return 0;
+  }
+
+  const focus = getFocusSessionState();
+
+  if (focus.secondsRemaining === null) {
+    focus.secondsRemaining = parseSessionMinutes(session.time) * 60;
+  }
+
+  return Math.max(0, Number(focus.secondsRemaining) || 0);
+}
+
+function getCompletedFocusMinutes(session) {
+  const plannedSeconds = parseSessionMinutes(session.time) * 60;
+  const elapsedSeconds = plannedSeconds - getFocusSeconds(session);
+
+  if (elapsedSeconds <= 0) {
+    return parseSessionMinutes(session.time);
+  }
+
+  return Math.max(1, Math.round(elapsedSeconds / 60));
+}
+
+function stopFocusTicker() {
+  if (focusTimerId) {
+    window.clearInterval(focusTimerId);
+    focusTimerId = null;
+  }
+}
+
+function syncFocusTicker() {
+  stopFocusTicker();
+
+  if (getFocusSessionState().isRunning) {
+    focusTimerId = window.setInterval(tickFocusTimer, 1000);
+  }
+}
+
+function tickFocusTimer() {
+  const session = getCurrentFocusSession();
+  const focus = getFocusSessionState();
+
+  if (!session || !focus.isRunning) {
+    stopFocusTicker();
+    return;
+  }
+
+  const now = Date.now();
+  const lastTick = new Date(focus.startedAt).getTime();
+  const elapsedSeconds = Number.isFinite(lastTick) ? Math.max(1, Math.floor((now - lastTick) / 1000)) : 1;
+
+  focus.secondsRemaining = Math.max(0, getFocusSeconds(session) - elapsedSeconds);
+  focus.startedAt = new Date(now).toISOString();
+
+  if (focus.secondsRemaining <= 0) {
+    focus.isRunning = false;
+    focus.startedAt = null;
+    stopFocusTicker();
+  }
+
+  updateFocusTimerDisplay();
+  saveState();
+}
+
+function startFocusTimer() {
+  const session = getCurrentFocusSession();
+
+  if (!session || isSessionComplete(session)) {
+    return;
+  }
+
+  const focus = getFocusSessionState();
+
+  if (getFocusSeconds(session) <= 0) {
+    focus.secondsRemaining = parseSessionMinutes(session.time) * 60;
+  }
+
+  focus.isRunning = true;
+  focus.startedAt = new Date().toISOString();
+  syncFocusTicker();
+  renderFocusSession();
+  saveState();
+}
+
+function pauseFocusTimer() {
+  const focus = getFocusSessionState();
+  focus.isRunning = false;
+  focus.startedAt = null;
+  syncFocusTicker();
+  renderFocusSession();
+  saveState();
+}
+
+function resetFocusTimer() {
+  const session = getCurrentFocusSession();
+
+  if (!session) {
+    return;
+  }
+
+  const focus = getFocusSessionState();
+  focus.secondsRemaining = parseSessionMinutes(session.time) * 60;
+  focus.isRunning = false;
+  focus.startedAt = null;
+  syncFocusTicker();
+  renderFocusSession();
+  saveState();
+}
+
+function completeFocusSession() {
+  const session = getCurrentFocusSession();
+
+  if (!session) {
+    return;
+  }
+
+  const focus = getFocusSessionState();
+  const minutes = getCompletedFocusMinutes(session);
+
+  focus.isRunning = false;
+  focus.startedAt = null;
+  completeStudySession(session, minutes, focus.notes);
+
+  const nextSession = getFocusCandidateSessions().find((item) => item.id !== session.id && !isSessionComplete(item));
+  resetFocusSessionForSession(nextSession || session);
+  syncFocusTicker();
+  renderAll();
+  document.querySelector("#focusStatusText").textContent = `Completed ${session.task}.`;
+}
+
 function buildTopics() {
   return getTopicStats().slice(0, 5);
 }
@@ -849,6 +1106,66 @@ function renderSchedule() {
     .join("");
 }
 
+function updateFocusTimerDisplay() {
+  const session = getCurrentFocusSession();
+  const focus = getFocusSessionState();
+  const remainingSeconds = getFocusSeconds(session);
+  const isComplete = session ? isSessionComplete(session) : false;
+
+  document.querySelector("#focusTimer").textContent = formatTimer(remainingSeconds);
+  document.querySelector("#focusStatus").textContent = isComplete ? "Done" : focus.isRunning ? "Running" : "Ready";
+  document.querySelector("#focusStart").disabled = !session || focus.isRunning || isComplete || remainingSeconds <= 0;
+  document.querySelector("#focusPause").disabled = !session || !focus.isRunning;
+  document.querySelector("#focusReset").disabled = !session || isComplete;
+  document.querySelector("#focusComplete").disabled = !session || isComplete;
+}
+
+function renderFocusSession() {
+  const select = document.querySelector("#focusSessionSelect");
+  const task = document.querySelector("#focusTask");
+  const meta = document.querySelector("#focusMeta");
+  const notes = document.querySelector("#focusNotes");
+  const statusText = document.querySelector("#focusStatusText");
+  const sessions = getFocusCandidateSessions();
+  const incompleteSessions = sessions.filter((session) => !isSessionComplete(session));
+  const selectableSessions = incompleteSessions.length ? incompleteSessions : sessions;
+  const session = getCurrentFocusSession();
+  const focus = getFocusSessionState();
+
+  select.innerHTML = selectableSessions
+    .map(
+      (item) => `
+        <option value="${escapeHTML(item.id)}">${escapeHTML(item.day)} - ${escapeHTML(item.task)}</option>
+      `,
+    )
+    .join("");
+  select.disabled = !selectableSessions.length || focus.isRunning;
+
+  if (!session) {
+    task.textContent = "Generate a plan";
+    meta.textContent = "No session selected";
+    notes.value = "";
+    statusText.textContent = "";
+    updateFocusTimerDisplay();
+    return;
+  }
+
+  select.value = session.id;
+  task.textContent = session.task;
+  meta.textContent = `${session.day} - ${session.focus} - ${session.time}`;
+
+  if (document.activeElement !== notes) {
+    notes.value = focus.notes || "";
+  }
+
+  statusText.textContent = isSessionComplete(session)
+    ? "Session already completed."
+    : focus.isRunning
+      ? "Timer running."
+      : "";
+  updateFocusTimerDisplay();
+}
+
 function renderTopics() {
   const list = document.querySelector("#topicList");
   const topics = buildTopics();
@@ -924,6 +1241,7 @@ function renderProgressInsights() {
               <div>
                 <strong>${escapeHTML(session.task)}</strong>
                 <span>${escapeHTML(session.focus)} - ${formatCompletedAt(session.completedAt)}</span>
+                ${session.notes ? `<p>${escapeHTML(session.notes)}</p>` : ""}
               </div>
               <em>${Number(session.minutes) || 0} min</em>
             </div>
@@ -987,10 +1305,12 @@ function renderAll() {
   renderMaterials();
   renderDeadlines();
   renderSchedule();
+  renderFocusSession();
   renderTopics();
   renderProgressInsights();
   renderQuestion();
   renderMetrics();
+  syncFocusTicker();
   saveState();
 }
 
@@ -1251,8 +1571,10 @@ function buildStudyReport() {
     "",
     ...formatReportLineItems(
       completedSessions.slice(0, 6),
-      (session) =>
-        `- ${session.task} - ${session.focus} - ${session.minutes} min - completed ${formatCompletedAt(session.completedAt)}`,
+      (session) => {
+        const noteText = session.notes ? ` - note: ${session.notes}` : "";
+        return `- ${session.task} - ${session.focus} - ${session.minutes} min - completed ${formatCompletedAt(session.completedAt)}${noteText}`;
+      },
       "No completed sessions yet.",
     ),
     "",
@@ -1608,26 +1930,35 @@ document.querySelector("#scheduleList").addEventListener("click", (event) => {
     return;
   }
 
-  const progress = ensureTopicProgress(session.focus);
-
   if (state.completedSessions[session.id]) {
-    delete state.completedSessions[session.id];
-    progress.studySessions = Math.max(0, (progress.studySessions || 0) - 1);
-    progress.confidence = Math.max(5, progress.confidence - 4);
+    reopenStudySession(session);
   } else {
-    state.completedSessions[session.id] = {
-      id: session.id,
-      task: session.task,
-      focus: session.focus,
-      minutes: parseSessionMinutes(session.time),
-      completedAt: new Date().toISOString(),
-    };
-    progress.studySessions = (progress.studySessions || 0) + 1;
-    progress.confidence = Math.min(100, progress.confidence + 4);
-    progress.lastReviewedAt = new Date().toISOString();
+    completeStudySession(session);
   }
 
   renderAll();
+});
+
+document.querySelector("#focusSessionSelect").addEventListener("change", (event) => {
+  const session = getFocusCandidateSessions().find((item) => item.id === event.target.value);
+
+  if (!session) {
+    return;
+  }
+
+  resetFocusSessionForSession(session);
+  renderFocusSession();
+  saveState();
+});
+
+document.querySelector("#focusStart").addEventListener("click", startFocusTimer);
+document.querySelector("#focusPause").addEventListener("click", pauseFocusTimer);
+document.querySelector("#focusReset").addEventListener("click", resetFocusTimer);
+document.querySelector("#focusComplete").addEventListener("click", completeFocusSession);
+
+document.querySelector("#focusNotes").addEventListener("input", (event) => {
+  getFocusSessionState().notes = event.target.value;
+  saveState();
 });
 
 document.querySelector("#spacedReviewList").addEventListener("click", (event) => {

@@ -13,6 +13,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Assignment, quiz, project, and exam deadline tracking
 - Study schedule preview organized around exam dates
 - Study session completion tracking with total minutes studied
+- Focus session timer with quick notes and progress updates
 - Progress insights for confidence, streak, completed sessions, and recent activity
 - Spaced-review queue that schedules topics by confidence and review recency
 - Downloadable `.ics` calendar export for generated study sessions
