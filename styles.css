@@ -336,7 +336,7 @@ button:disabled {
 
 .setup-form {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.9fr) minmax(120px, 0.7fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.9fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr);
   gap: 10px;
   margin-top: 16px;
 }
@@ -373,6 +373,44 @@ textarea {
 .deadline-form .primary-button {
   align-self: end;
   min-height: 44px;
+}
+
+.study-day-fieldset {
+  grid-column: 1 / -1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 10px 12px 12px;
+}
+
+.study-day-fieldset legend {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 0 5px;
+}
+
+.study-day-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.study-day-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f6f8fc;
+  color: var(--ink);
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.study-day-options input {
+  width: auto;
+  margin: 0;
 }
 
 .upload-actions {

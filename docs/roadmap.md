@@ -15,6 +15,7 @@
 - [x] Add assignment, quiz, project, and exam deadline tracking
 - [x] Suggest deadlines from uploaded syllabus and assignment text
 - [x] Blend urgent deadlines into generated study sessions
+- [x] Respect preferred study days and start time in schedules
 - [x] Generate source-backed quiz cards from indexed material text
 - [x] Add answer reveal with material source attribution
 - [x] Add local passage retrieval for material-grounded answers

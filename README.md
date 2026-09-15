@@ -12,6 +12,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Lightweight local indexing for `.txt`, `.md`, `.csv`, and PDF files
 - Assignment, quiz, project, and exam deadline tracking
 - Deadline suggestions extracted from uploaded syllabus or assignment text
+- Study availability controls for preferred days and calendar start time
 - Study schedule preview organized around exam dates
 - Study session completion tracking with total minutes studied
 - Focus session timer with quick notes and progress updates

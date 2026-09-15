@@ -113,6 +113,22 @@
                 Daily minutes
                 <input id="dailyMinutes" name="dailyMinutes" type="number" min="15" max="240" step="5" value="45" />
               </label>
+              <label>
+                Start time
+                <input id="preferredStartTime" name="preferredStartTime" type="time" value="18:00" />
+              </label>
+              <fieldset class="study-day-fieldset">
+                <legend>Study days</legend>
+                <div class="study-day-options">
+                  <label><input type="checkbox" name="studyDay" value="1" checked /> Mon</label>
+                  <label><input type="checkbox" name="studyDay" value="2" checked /> Tue</label>
+                  <label><input type="checkbox" name="studyDay" value="3" checked /> Wed</label>
+                  <label><input type="checkbox" name="studyDay" value="4" checked /> Thu</label>
+                  <label><input type="checkbox" name="studyDay" value="5" checked /> Fri</label>
+                  <label><input type="checkbox" name="studyDay" value="6" /> Sat</label>
+                  <label><input type="checkbox" name="studyDay" value="0" /> Sun</label>
+                </div>
+              </fieldset>
             </form>
             <div class="upload-actions">
               <button class="secondary-button" type="button" id="chooseFiles">Choose files</button>

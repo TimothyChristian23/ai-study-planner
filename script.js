@@ -63,6 +63,8 @@ const monthLookup = {
   december: 11,
 };
 
+const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 const sampleMaterials = [
   {
     id: "sample-syllabus",
@@ -132,6 +134,8 @@ const defaultState = {
     name: "Data Structures",
     examDate: "2026-10-18",
     dailyMinutes: 45,
+    preferredStartTime: "18:00",
+    studyDays: [1, 2, 3, 4, 5],
   },
   materials: sampleMaterials,
   deadlines: sampleDeadlines,
@@ -155,6 +159,14 @@ function normalizeState(rawState = {}) {
   const merged = { ...structuredClone(defaultState), ...rawState };
 
   merged.course = { ...structuredClone(defaultState.course), ...(rawState.course || {}) };
+  merged.course.dailyMinutes = Number(merged.course.dailyMinutes) || defaultState.course.dailyMinutes;
+  merged.course.preferredStartTime = isValidStudyTime(merged.course.preferredStartTime)
+    ? merged.course.preferredStartTime
+    : defaultState.course.preferredStartTime;
+  const normalizedStudyDays = Array.isArray(merged.course.studyDays)
+    ? [...new Set(merged.course.studyDays.map(Number).filter((day) => day >= 0 && day <= 6))]
+    : defaultState.course.studyDays;
+  merged.course.studyDays = normalizedStudyDays.length ? normalizedStudyDays : defaultState.course.studyDays;
   merged.materials = (merged.materials || []).map((material) => ({
     ...material,
     id: material.id || makeId(),
@@ -305,6 +317,58 @@ function formatDateKey(date) {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function isValidStudyTime(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value || "");
+}
+
+function getPreferredStartTime() {
+  return isValidStudyTime(state.course.preferredStartTime)
+    ? state.course.preferredStartTime
+    : defaultState.course.preferredStartTime;
+}
+
+function getStudyDays() {
+  const studyDays = Array.isArray(state.course.studyDays)
+    ? [...new Set(state.course.studyDays.map(Number).filter((day) => day >= 0 && day <= 6))]
+    : defaultState.course.studyDays;
+
+  return studyDays.length ? studyDays : defaultState.course.studyDays;
+}
+
+function formatStudyDays(days = getStudyDays()) {
+  const displayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+  return displayOrder
+    .filter((day) => days.includes(day))
+    .map((day) => dayLabels[day])
+    .join(", ");
+}
+
+function getStudyDateForIndex(index) {
+  const studyDays = getStudyDays();
+  const cursor = new Date();
+  cursor.setHours(9, 0, 0, 0);
+  let studySessionIndex = 0;
+
+  for (let guard = 0; guard < 90; guard += 1) {
+    if (studyDays.includes(cursor.getDay())) {
+      if (studySessionIndex === index) {
+        return new Date(cursor);
+      }
+
+      studySessionIndex += 1;
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const fallback = new Date();
+  fallback.setDate(fallback.getDate() + index);
+  fallback.setHours(9, 0, 0, 0);
+
+  return fallback;
 }
 
 function parseExamDate() {
@@ -974,7 +1038,6 @@ function buildSchedule() {
   const topics = getTopicStats();
   const openDeadlines = getOpenDeadlines();
   const sessionCount = Math.min(7, Math.max(3, topics.length + Math.min(openDeadlines.length, 3)));
-  const today = new Date();
 
   return Array.from({ length: sessionCount }, (_, index) => {
     const deadline = openDeadlines[index % Math.max(openDeadlines.length, 1)];
@@ -984,8 +1047,7 @@ function buildSchedule() {
     if (shouldPlanDeadline) {
       const daysLeft = getDaysUntil(deadline.dueDate);
       const topicName = deadline.topic || "General review";
-      const sessionDate = new Date(today);
-      sessionDate.setDate(today.getDate() + index);
+      const sessionDate = getStudyDateForIndex(index);
       const action = deadline.type === "Exam" || deadline.type === "Quiz" ? "Prep for" : "Make progress on";
 
       return withSessionId({
@@ -1002,8 +1064,7 @@ function buildSchedule() {
 
     const topic = topics[index % topics.length];
     const material = findMaterialForTopic(topic.name);
-    const sessionDate = new Date(today);
-    sessionDate.setDate(today.getDate() + index);
+    const sessionDate = getStudyDateForIndex(index);
     const isFinalReview = Boolean(openDeadlines.length) && index === sessionCount - 1;
     const verb = topic.score < 48 ? "Repair weak spot" : index % 2 === 0 ? "Active recall" : "Review source";
     const task = isFinalReview
@@ -1597,6 +1658,11 @@ function renderCourse() {
   document.querySelector("#courseName").value = state.course.name;
   document.querySelector("#examDate").value = state.course.examDate;
   document.querySelector("#dailyMinutes").value = state.course.dailyMinutes;
+  document.querySelector("#preferredStartTime").value = getPreferredStartTime();
+  const selectedStudyDays = new Set(getStudyDays().map(String));
+  document.querySelectorAll("[name='studyDay']").forEach((input) => {
+    input.checked = selectedStudyDays.has(input.value);
+  });
   const nextDeadline = getNextDeadline();
 
   document.querySelector("#nextExamCourse").textContent = nextDeadline?.title || state.course.name || "Course";
@@ -1855,6 +1921,8 @@ function buildStudyReport() {
     `Course: ${state.course.name || "Course"}`,
     `Exam date: ${state.course.examDate || "Not set"}`,
     `Daily study target: ${state.course.dailyMinutes || 45} minutes`,
+    `Preferred start time: ${getPreferredStartTime()}`,
+    `Study days: ${formatStudyDays()}`,
     "",
     "## Snapshot",
     "",
@@ -2019,12 +2087,13 @@ function foldIcsLine(line) {
 
 function getSessionStartDate(session, index) {
   const dateKey = session.dateKey || formatDateKey(new Date(Date.now() + index * 86400000));
-  const start = new Date(`${dateKey}T18:00:00`);
+  const start = new Date(`${dateKey}T${getPreferredStartTime()}:00`);
 
   if (Number.isNaN(start.getTime())) {
     const fallback = new Date();
     fallback.setDate(fallback.getDate() + index);
-    fallback.setHours(18, 0, 0, 0);
+    const [hours, minutes] = getPreferredStartTime().split(":").map(Number);
+    fallback.setHours(hours, minutes, 0, 0);
     return fallback;
   }
 
@@ -2217,10 +2286,16 @@ document.querySelector("#fileList").addEventListener("click", (event) => {
 });
 
 document.querySelector("#studySetup").addEventListener("input", () => {
+  const selectedStudyDays = [...document.querySelectorAll("[name='studyDay']:checked")].map((input) =>
+    Number(input.value),
+  );
+
   state.course = {
     name: document.querySelector("#courseName").value.trim() || "Course",
     examDate: document.querySelector("#examDate").value,
     dailyMinutes: Number(document.querySelector("#dailyMinutes").value) || 45,
+    preferredStartTime: document.querySelector("#preferredStartTime").value || defaultState.course.preferredStartTime,
+    studyDays: selectedStudyDays.length ? selectedStudyDays : defaultState.course.studyDays,
   };
   renderAll();
 });
