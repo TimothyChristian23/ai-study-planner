@@ -61,4 +61,4 @@
 - [x] Add responsive mobile experience
 - [x] Add screenshots and project write-up
 - [x] Prepare GitHub Pages deployment workflow
-- [ ] Deploy publicly with seeded sample materials
+- [x] Deploy publicly with seeded sample materials
