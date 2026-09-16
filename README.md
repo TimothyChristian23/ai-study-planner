@@ -58,4 +58,4 @@ You can also open `index.html` directly in a browser for the non-PDF parts of th
 
 ## Roadmap
 
-See `docs/roadmap.md` for a phased build plan and `docs/data-model.md` for the MVP data model.
+See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.
