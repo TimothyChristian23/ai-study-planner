@@ -22,6 +22,7 @@
 - [x] Track quiz attempt history and accuracy
 - [x] Add local passage retrieval for material-grounded answers
 - [x] Show grounding confidence and cited source excerpts
+- [x] Track recent grounded questions and cited sources
 - [x] Track completed study sessions and minutes studied
 - [x] Add focus session timer with notes
 - [x] Feed completed sessions back into topic confidence

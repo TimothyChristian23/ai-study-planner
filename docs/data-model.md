@@ -92,6 +92,23 @@ This document captures the local data shape used by the static prototype and the
       answeredAt: "2026-09-14T19:15:00.000Z"
     }
   ],
+  answerHistory: [
+    {
+      id: "uuid",
+      question: "What should I review before the graph traversal quiz?",
+      answer: "Based on Lecture 7, review BFS queue behavior and DFS recursion order.",
+      grounding: "Grounding: strong",
+      citations: [
+        {
+          source: "Lecture 7 - Graph Traversal.txt",
+          topic: "Graph traversal",
+          snippet: "BFS uses a queue and is preferred when exploring by distance.",
+          score: 6
+        }
+      ],
+      askedAt: "2026-09-14T19:20:00.000Z"
+    }
+  ],
   materialSearchQuery: "graph traversal",
   focusSession: {
     selectedSessionId: "Sep 15|Repair weak spot: Graph traversal|Graph traversal",
@@ -162,9 +179,19 @@ This document captures the local data shape used by the static prototype and the
 - `id`
 - `course_id`
 - `material_chunk_id`
+- `material_question_id`
 - `question`
 - `answer_excerpt`
 - `match_score`
+- `created_at`
+
+### material_questions
+
+- `id`
+- `course_id`
+- `question`
+- `answer`
+- `grounding`
 - `created_at`
 
 ### study_sessions

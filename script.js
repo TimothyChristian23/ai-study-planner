@@ -144,6 +144,7 @@ const defaultState = {
   topicProgress: {},
   completedSessions: {},
   quizHistory: [],
+  answerHistory: [],
   materialSearchQuery: "",
   focusSession: {
     selectedSessionId: "",
@@ -220,6 +221,17 @@ function normalizeState(rawState = {}) {
       answeredAt: attempt.answeredAt || new Date().toISOString(),
     }))
     .slice(0, 50);
+  merged.answerHistory = (merged.answerHistory || [])
+    .map((entry) => ({
+      ...entry,
+      id: entry.id || makeId(),
+      question: entry.question || "Study question",
+      answer: entry.answer || "",
+      grounding: entry.grounding || "Grounding: none",
+      citations: Array.isArray(entry.citations) ? entry.citations.slice(0, 3).map(normalizeAnswerCitation) : [],
+      askedAt: entry.askedAt || new Date().toISOString(),
+    }))
+    .slice(0, 20);
   merged.materialSearchQuery = rawState.materialSearchQuery || "";
   const rawFocusSession = rawState.focusSession || {};
   const rawSecondsRemaining = Number(rawFocusSession.secondsRemaining);
@@ -882,6 +894,41 @@ function getQuizStreak(history = getQuizHistory()) {
   }
 
   return streak;
+}
+
+function normalizeAnswerCitation(citation = {}) {
+  return {
+    source: citation.source || "Uploaded material",
+    topic: citation.topic || "General review",
+    snippet: citation.snippet || "",
+    score: Number(citation.score) || 0,
+  };
+}
+
+function getAnswerHistory() {
+  return [...(state.answerHistory || [])].sort(
+    (a, b) => new Date(b.askedAt).getTime() - new Date(a.askedAt).getTime(),
+  );
+}
+
+function recordAnswerHistory(question, result) {
+  if (!question) {
+    return;
+  }
+
+  const citations = Array.isArray(result.citations) ? result.citations : [];
+
+  state.answerHistory = [
+    {
+      id: makeId(),
+      question,
+      answer: result.answer,
+      grounding: result.grounding,
+      citations: citations.slice(0, 3).map(normalizeAnswerCitation),
+      askedAt: new Date().toISOString(),
+    },
+    ...(state.answerHistory || []),
+  ].slice(0, 20);
 }
 
 function recordQuizAttempt(question, wasHit, confidenceAfter) {
@@ -1901,6 +1948,38 @@ function renderQuizInsights() {
     : `<p class="empty-state">No quiz attempts yet.</p>`;
 }
 
+function renderAnswerHistory() {
+  const history = getAnswerHistory();
+  const historyList = document.querySelector("#answerHistory");
+  const historyCount = document.querySelector("#answerHistoryCount");
+
+  historyCount.textContent = `${history.length} saved`;
+  historyList.innerHTML = history.length
+    ? history
+        .slice(0, 4)
+        .map((entry) => {
+          const sourceNames = [
+            ...new Set(entry.citations.map((citation) => citation.source).filter(Boolean)),
+          ].slice(0, 2);
+          const sourceLabel = sourceNames.length ? sourceNames.join(", ") : "No cited sources";
+          const normalizedAnswer = normalizeWhitespace(entry.answer);
+          const preview = normalizedAnswer.slice(0, 170);
+
+          return `
+            <article class="answer-history-item">
+              <div>
+                <strong>${escapeHTML(entry.question)}</strong>
+                <span>${escapeHTML(entry.grounding)} - ${formatCompletedAt(entry.askedAt)}</span>
+              </div>
+              <p>${escapeHTML(preview)}${normalizedAnswer.length > 170 ? "..." : ""}</p>
+              <small>${escapeHTML(sourceLabel)}</small>
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-state">No material questions yet.</p>`;
+}
+
 function renderCourse() {
   document.querySelector("#courseName").value = state.course.name;
   document.querySelector("#examDate").value = state.course.examDate;
@@ -1951,6 +2030,7 @@ function renderAll() {
   renderReadinessInsights();
   renderQuestion();
   renderQuizInsights();
+  renderAnswerHistory();
   renderMetrics();
   syncFocusTicker();
   saveState();
@@ -2157,6 +2237,7 @@ function buildStudyReport() {
   const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
   const spacedReviews = getSpacedReviewItems();
   const quizHistory = getQuizHistory();
+  const answerHistory = getAnswerHistory();
   const completedSessions = getCompletedSessions().sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
   );
@@ -2244,6 +2325,17 @@ function buildStudyReport() {
       (attempt) =>
         `- ${attempt.topic}: ${attempt.result === "hit" ? "Got it" : "Needs review"} - ${attempt.source} - ${formatCompletedAt(attempt.answeredAt)}`,
       "No quiz attempts yet.",
+    ),
+    "",
+    "## Recent Material Questions",
+    "",
+    ...formatReportLineItems(
+      answerHistory.slice(0, 6),
+      (entry) => {
+        const sources = [...new Set(entry.citations.map((citation) => citation.source).filter(Boolean))].join(", ");
+        return `- ${entry.question} - ${entry.grounding} - ${sources || "No citations"} - ${formatCompletedAt(entry.askedAt)}`;
+      },
+      "No material questions yet.",
     ),
     "",
     "## Spaced Review Queue",
@@ -2735,6 +2827,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
     topicProgress: {},
     completedSessions: {},
     quizHistory: [],
+    answerHistory: [],
     materialSearchQuery: "",
     questionIndex: 0,
   };
@@ -2816,6 +2909,9 @@ document.querySelector("#answerQuestion").addEventListener("click", () => {
       `,
     )
     .join("");
+  recordAnswerHistory(question, result);
+  renderAnswerHistory();
+  saveState();
 });
 
 renderAll();
