@@ -144,6 +144,7 @@ const defaultState = {
   topicProgress: {},
   completedSessions: {},
   quizHistory: [],
+  materialSearchQuery: "",
   focusSession: {
     selectedSessionId: "",
     secondsRemaining: null,
@@ -219,6 +220,7 @@ function normalizeState(rawState = {}) {
       answeredAt: attempt.answeredAt || new Date().toISOString(),
     }))
     .slice(0, 50);
+  merged.materialSearchQuery = rawState.materialSearchQuery || "";
   const rawFocusSession = rawState.focusSession || {};
   const rawSecondsRemaining = Number(rawFocusSession.secondsRemaining);
   merged.focusSession = {
@@ -1407,10 +1409,110 @@ function buildQuestions() {
   ];
 }
 
+function getMaterialSearchTerms(query) {
+  const terms = getSearchTerms(query);
+
+  if (terms.length) {
+    return terms;
+  }
+
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 1);
+}
+
+function buildMaterialSearchResults(query) {
+  const terms = getMaterialSearchTerms(query);
+
+  if (!terms.length) {
+    return [];
+  }
+
+  return state.materials
+    .flatMap((material) => {
+      const sourceText = `${material.name} ${material.type} ${material.status} ${material.topics.join(" ")}`.toLowerCase();
+      const sourceScore = terms.reduce((total, term) => total + (sourceText.includes(term) ? 2 : 0), 0);
+      const sourceMatch = sourceScore
+        ? [
+            {
+              material,
+              topic: material.topics[0] || material.type,
+              text: `${material.type} - ${material.status} - topics: ${material.topics.join(", ")}`,
+              score: sourceScore,
+            },
+          ]
+        : [];
+      const passageMatches = material.text
+        ? buildPassages(material)
+            .map((passage) => ({
+              ...passage,
+              score: scorePassage(passage, terms),
+            }))
+            .filter((passage) => passage.score > 0)
+            .slice(0, 3)
+        : [];
+
+      return [...sourceMatch, ...passageMatches];
+    })
+    .sort((a, b) => b.score - a.score || a.material.name.localeCompare(b.material.name))
+    .slice(0, 6);
+}
+
+function renderMaterialSearch() {
+  const panel = document.querySelector("#materialSearchPanel");
+  const input = document.querySelector("#materialSearch");
+  const results = document.querySelector("#materialSearchResults");
+  const query = state.materialSearchQuery || "";
+  const trimmedQuery = query.trim();
+  const matches = buildMaterialSearchResults(trimmedQuery);
+
+  panel.hidden = !state.materials.length;
+
+  if (document.activeElement !== input) {
+    input.value = query;
+  }
+
+  if (!state.materials.length) {
+    results.innerHTML = "";
+    return;
+  }
+
+  if (!trimmedQuery) {
+    results.innerHTML = state.materials
+      .slice(0, 3)
+      .map(
+        (material) => `
+          <article class="material-result-card">
+            <strong>${escapeHTML(material.name)}</strong>
+            <span>${escapeHTML(material.status)} - ${escapeHTML(material.topics.join(", "))}</span>
+          </article>
+        `,
+      )
+      .join("");
+    return;
+  }
+
+  results.innerHTML = matches.length
+    ? matches
+        .map(
+          (match) => `
+            <article class="material-result-card">
+              <strong>${escapeHTML(match.material.name)}</strong>
+              <span>${escapeHTML(match.topic)} - match ${match.score}</span>
+              <p>${escapeHTML(match.text)}</p>
+            </article>
+          `,
+        )
+        .join("")
+    : `<p class="empty-state">No matching source passages.</p>`;
+}
+
 function renderMaterials() {
   const list = document.querySelector("#fileList");
   const empty = document.querySelector("#emptyMaterials");
   empty.hidden = state.materials.length > 0;
+  renderMaterialSearch();
 
   list.innerHTML = state.materials
     .map(
@@ -2380,6 +2482,12 @@ document.querySelector("#fileList").addEventListener("click", (event) => {
   renderAll();
 });
 
+document.querySelector("#materialSearch").addEventListener("input", (event) => {
+  state.materialSearchQuery = event.target.value;
+  renderMaterials();
+  saveState();
+});
+
 document.querySelector("#studySetup").addEventListener("input", () => {
   const selectedStudyDays = [...document.querySelectorAll("[name='studyDay']:checked")].map((input) =>
     Number(input.value),
@@ -2560,6 +2668,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
     topicProgress: {},
     completedSessions: {},
     quizHistory: [],
+    materialSearchQuery: "",
     questionIndex: 0,
   };
   quizAnswerVisible = false;

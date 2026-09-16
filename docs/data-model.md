@@ -92,6 +92,7 @@ This document captures the local data shape used by the static prototype and the
       answeredAt: "2026-09-14T19:15:00.000Z"
     }
   ],
+  materialSearchQuery: "graph traversal",
   focusSession: {
     selectedSessionId: "Sep 15|Repair weak spot: Graph traversal|Graph traversal",
     secondsRemaining: 1800,
@@ -228,5 +229,6 @@ This document captures the local data shape used by the static prototype and the
 - Course availability stores preferred study days as JavaScript day numbers, where `0` is Sunday and `6` is Saturday.
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
 - Suggested deadlines are extracted locally from uploaded material text and kept separate until the student accepts them.
+- Material search uses local indexed text and file metadata only; no source content leaves the browser.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

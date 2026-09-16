@@ -343,6 +343,7 @@ button:disabled {
 
 .setup-form label,
 .deadline-form label,
+.material-search label,
 .focus-panel label,
 .answer-panel label {
   color: var(--muted);
@@ -353,6 +354,7 @@ button:disabled {
 .setup-form input,
 .deadline-form input,
 .deadline-form select,
+.material-search input,
 .focus-panel select,
 textarea {
   width: 100%;
@@ -440,6 +442,47 @@ textarea {
   margin: 16px 0 0;
   display: grid;
   gap: 10px;
+}
+
+.material-search {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.material-search[hidden] {
+  display: none;
+}
+
+.material-search-results {
+  display: grid;
+  gap: 10px;
+}
+
+.material-result-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6f8fc;
+  padding: 12px;
+}
+
+.material-result-card strong,
+.material-result-card span {
+  display: block;
+}
+
+.material-result-card span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
+.material-result-card p {
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 8px 0 0;
 }
 
 .file-list li,

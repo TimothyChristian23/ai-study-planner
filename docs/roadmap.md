@@ -9,6 +9,7 @@
 - [x] Persist course setup and uploaded material metadata in local storage
 - [x] Index basic text files for first-pass material-grounded answers
 - [x] Extract searchable text from uploaded PDFs in the browser
+- [x] Add local source search across indexed materials
 - [x] Document the prototype and MVP data models
 - [x] Track quiz feedback by topic in local storage
 - [x] Generate adaptive study sessions from weak topics and exam timing
