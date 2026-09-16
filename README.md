@@ -2,9 +2,35 @@
 
 AI Study Planner is a portfolio app concept for turning course materials into a focused study system. Students can upload syllabi, notes, PDFs, assignments, and exam dates, then get a study schedule, quizzes, weak-topic tracking, and answers grounded in their own materials.
 
-## First Version
+## Live Demo
 
-This repo currently includes a dependency-free static prototype with the first functional intake step:
+Try the deployed prototype:
+
+https://timothychristian23.github.io/ai-study-planner/
+
+## Screenshots
+
+![AI Study Planner desktop dashboard](docs/assets/ai-study-planner-dashboard-desktop.png)
+
+![AI Study Planner mobile dashboard](docs/assets/ai-study-planner-dashboard-mobile.png)
+
+## Demo Walkthrough
+
+1. Click `Load demo` to restore the seeded course, materials, deadlines, progress, and answer history.
+2. Click `Generate plan` to build an adaptive study schedule from deadlines and weak topics.
+3. Use the `Quiz` panel to reveal an answer, then mark it as `Needs review` or `Got it`.
+4. Ask a question in `Ask materials` to see a grounded answer with cited source excerpts.
+5. Export the plan with `Export calendar`, `Export report`, or `Sample backup`.
+
+## What I Built
+
+This is a dependency-free static prototype focused on the core product workflow: local material intake, planning, practice, weak-topic tracking, retrieval-style answers, and portfolio-ready exports. It runs in the browser with `localStorage` persistence and a seeded demo state.
+
+Future full-stack work would add authentication, durable cloud storage, server-side file parsing, embeddings, and AI-generated answers over retrieved material chunks.
+
+## Current Prototype
+
+This repo currently includes:
 
 - Upload queue for syllabi, notes, PDFs, and assignments
 - Drag-and-drop or file picker material intake
@@ -39,14 +65,6 @@ node scripts/dev-server.mjs
 ```
 
 You can also open `index.html` directly in a browser for the non-PDF parts of the prototype.
-
-## Deployment
-
-The static app is deployed with GitHub Pages from `main`:
-
-```text
-https://timothychristian23.github.io/ai-study-planner/
-```
 
 ## Product Goals
 
