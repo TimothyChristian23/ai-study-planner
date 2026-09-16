@@ -40,6 +40,14 @@ node scripts/dev-server.mjs
 
 You can also open `index.html` directly in a browser for the non-PDF parts of the prototype.
 
+## Deployment
+
+The repo includes a GitHub Pages workflow that publishes the static app from `main` after Pages is enabled for the repository. Expected Pages URL:
+
+```text
+https://timothychristian23.github.io/ai-study-planner/
+```
+
 ## Product Goals
 
 - Help students convert messy course materials into a practical plan

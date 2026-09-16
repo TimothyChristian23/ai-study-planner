@@ -60,4 +60,5 @@
 - [x] Polish seeded demo reset and sample backup workflow
 - [x] Add responsive mobile experience
 - [x] Add screenshots and project write-up
+- [x] Prepare GitHub Pages deployment workflow
 - [ ] Deploy publicly with seeded sample materials
