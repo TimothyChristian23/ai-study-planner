@@ -30,6 +30,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Quiz feedback that changes topic confidence and reprioritizes the plan
 - Material-grounded answer panel with passage retrieval and citations
 - Grounded answer history with recent questions and cited sources
+- Responsive dashboard layout with mobile-friendly navigation and controls
 
 For the most reliable PDF indexing, run a local static server and open the served URL:
 

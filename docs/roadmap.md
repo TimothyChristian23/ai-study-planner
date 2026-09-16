@@ -57,7 +57,7 @@
 
 ## Phase 5: Portfolio Polish
 
-- Polish seeded demo reset and sample backup workflow
-- Add responsive mobile experience
-- Add screenshots and project write-up
-- Deploy publicly with seeded sample materials
+- [ ] Polish seeded demo reset and sample backup workflow
+- [x] Add responsive mobile experience
+- [ ] Add screenshots and project write-up
+- [ ] Deploy publicly with seeded sample materials
