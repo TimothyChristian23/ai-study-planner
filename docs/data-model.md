@@ -252,6 +252,7 @@ This document captures the local data shape used by the static prototype and the
 
 - The browser prototype stores extracted text in `localStorage`, which is only appropriate for demo use.
 - Local JSON backups wrap this state as `{ schemaVersion, exportedAt, app, state }` so demos can be moved between browsers.
+- The seeded sample backup uses the same JSON shape as user exports, with sample schedule, progress, quiz history, and grounded answer history.
 - Generated schedule items include `dateKey` so the same local plan can drive both the UI and `.ics` calendar export.
 - Course availability stores preferred study days as JavaScript day numbers, where `0` is Sunday and `6` is Saturday.
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.

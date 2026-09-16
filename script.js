@@ -2517,22 +2517,122 @@ function downloadCalendarFile() {
   return link.download;
 }
 
-function makeBackupFileName() {
-  const courseSlug = (state.course.name || "study-planner")
+function makeSeededDemoState() {
+  const previousState = state;
+  const demoState = normalizeState(structuredClone(defaultState));
+
+  try {
+    state = demoState;
+    state.topicProgress = {
+      "Graph traversal": {
+        confidence: 58,
+        attempts: 3,
+        misses: 1,
+        studySessions: 2,
+        lastReviewedAt: "2026-09-15T18:45:00.000Z",
+      },
+      Assignments: {
+        confidence: 66,
+        attempts: 1,
+        misses: 0,
+        studySessions: 1,
+        lastReviewedAt: "2026-09-14T20:10:00.000Z",
+      },
+      "Exam logistics": {
+        confidence: 74,
+        attempts: 0,
+        misses: 0,
+        studySessions: 1,
+        lastReviewedAt: "2026-09-13T17:30:00.000Z",
+      },
+    };
+    state.schedule = buildSchedule();
+
+    const firstSession = state.schedule[0];
+    const secondSession = state.schedule[1] || firstSession;
+
+    state.completedSessions = firstSession
+      ? {
+          [firstSession.id]: {
+            id: firstSession.id,
+            task: firstSession.task,
+            focus: firstSession.focus,
+            minutes: parseSessionMinutes(firstSession.time),
+            completedAt: "2026-09-15T19:05:00.000Z",
+            notes: "Reworked BFS queue examples and marked DFS recursion questions for another pass.",
+          },
+        }
+      : {};
+    state.quizHistory = [
+      {
+        id: "sample-quiz-graph-hit",
+        topic: "Graph traversal",
+        question: 'Explain how "bfs" is used in this source.',
+        source: "Lecture 7 - Graph Traversal.txt",
+        result: "hit",
+        confidenceAfter: 67,
+        answeredAt: "2026-09-15T19:12:00.000Z",
+      },
+      {
+        id: "sample-quiz-graph-miss",
+        topic: "Graph traversal",
+        question: 'Explain how "dfs" is used in this source.',
+        source: "Lecture 7 - Graph Traversal.txt",
+        result: "miss",
+        confidenceAfter: 58,
+        answeredAt: "2026-09-14T18:40:00.000Z",
+      },
+    ];
+    state.answerHistory = [
+      {
+        id: "sample-answer-graph-review",
+        question: "What should I review before the graph traversal quiz?",
+        answer:
+          "Based on Lecture 7 - Graph Traversal.txt, focus on BFS queue behavior, DFS recursion or stack order, and when each traversal is preferred.",
+        grounding: "Grounding: strong",
+        citations: [
+          {
+            source: "Lecture 7 - Graph Traversal.txt",
+            topic: "Graph traversal",
+            snippet:
+              "BFS uses a queue and is preferred when exploring by distance from a start node. DFS uses recursion or a stack.",
+            score: 6,
+          },
+        ],
+        askedAt: "2026-09-15T19:18:00.000Z",
+      },
+    ];
+    state.materialSearchQuery = "graph traversal";
+    state.focusSession = {
+      ...structuredClone(defaultState.focusSession),
+      selectedSessionId: secondSession?.id || "",
+      secondsRemaining: secondSession ? parseSessionMinutes(secondSession.time) * 60 : null,
+      notes: "Compare queue vs stack behavior before starting.",
+    };
+
+    return normalizeState(state);
+  } finally {
+    state = previousState;
+  }
+}
+
+function makeBackupFileName(backupState = state, label = "backup") {
+  const courseSlug = ((backupState.course && backupState.course.name) || "study-planner")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   const dateStamp = new Date().toISOString().slice(0, 10);
 
-  return `${courseSlug || "study-planner"}-${dateStamp}-backup.json`;
+  return `${courseSlug || "study-planner"}-${dateStamp}-${label}.json`;
 }
 
-function downloadPlannerBackup() {
+function downloadPlannerBackup(backupState = state, label = "backup") {
+  const normalizedState = normalizeState(backupState);
   const payload = {
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     app: "AI Study Planner",
-    state: normalizeState(state),
+    state: normalizedState,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json;charset=utf-8",
@@ -2541,7 +2641,7 @@ function downloadPlannerBackup() {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = makeBackupFileName();
+  link.download = makeBackupFileName(normalizedState, label);
   document.body.append(link);
   link.click();
   link.remove();
@@ -2573,6 +2673,11 @@ document.querySelector("#chooseFiles").addEventListener("click", () => {
 document.querySelector("#exportData").addEventListener("click", () => {
   const fileName = downloadPlannerBackup();
   document.querySelector("#uploadStatus").textContent = `Exported ${fileName}`;
+});
+
+document.querySelector("#sampleBackup").addEventListener("click", () => {
+  const fileName = downloadPlannerBackup(makeSeededDemoState(), "sample-backup");
+  document.querySelector("#uploadStatus").textContent = `Exported sample backup ${fileName}`;
 });
 
 document.querySelector("#importData").addEventListener("click", () => {
@@ -2811,9 +2916,9 @@ document.querySelector("#spacedReviewList").addEventListener("click", (event) =>
 });
 
 document.querySelector("#loadDemo").addEventListener("click", () => {
-  state = normalizeState(structuredClone(defaultState));
+  state = makeSeededDemoState();
   quizAnswerVisible = false;
-  document.querySelector("#uploadStatus").textContent = "Loaded seeded demo data.";
+  document.querySelector("#uploadStatus").textContent = "Loaded seeded demo with schedule, progress, and answer history.";
   renderAll();
 });
 

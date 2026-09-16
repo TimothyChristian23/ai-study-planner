@@ -23,7 +23,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Spaced-review queue that schedules topics by confidence and review recency
 - Downloadable `.ics` calendar export for generated study sessions
 - Downloadable Markdown study report with plan, deadlines, weak topics, reviews, and activity
-- JSON backup/import controls for moving local planner data between browsers or restoring demos
+- JSON backup/import controls plus a downloadable seeded sample backup
 - Source-backed quiz cards generated from indexed course materials
 - Quiz attempt history with accuracy, streak, and recent results
 - Weak-topic tracker with priority levels
