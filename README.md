@@ -28,6 +28,8 @@ This is a dependency-free static prototype focused on the core product workflow:
 
 Future full-stack work would add authentication, durable cloud storage, server-side file parsing, embeddings, and AI-generated answers over retrieved material chunks.
 
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, vector search RPC, and an authenticated `ask-materials` Edge Function that calls OpenAI server-side.
+
 ## Current Prototype
 
 This repo currently includes:
@@ -84,4 +86,4 @@ You can also open `index.html` directly in a browser for the non-PDF parts of th
 
 ## Roadmap
 
-See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.
+See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, `docs/production-upgrade.md` for the production migration plan, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.

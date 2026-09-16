@@ -36,17 +36,19 @@
 
 ## Phase 2: Functional MVP
 
-- Add authentication
-- Store courses, deadlines, assignments, and study sessions
-- Parse uploaded PDFs and text files
-- Persist generated schedules from deadlines and available study time
+- [x] Scaffold Supabase schema, storage, RLS policies, and Edge Function foundation
+- [ ] Add authentication UI
+- [ ] Store courses, deadlines, assignments, and study sessions
+- [ ] Parse uploaded PDFs and text files server-side
+- [ ] Persist generated schedules from deadlines and available study time
 
 ## Phase 3: AI Study Engine
 
-- Chunk and embed course materials
-- Retrieve relevant passages for user questions
-- Generate quizzes from selected materials
-- Cite source documents in AI answers
+- [x] Add vector-ready material chunk schema and material Q&A function shell
+- [ ] Chunk and embed course materials
+- [ ] Retrieve relevant passages for user questions
+- [ ] Generate quizzes from selected materials
+- [ ] Cite source documents in AI answers
 
 ## Phase 4: Adaptive Learning
 

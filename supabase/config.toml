@@ -1,0 +1,4 @@
+project_id = "ai-study-planner"
+
+[functions.ask-materials]
+verify_jwt = true
