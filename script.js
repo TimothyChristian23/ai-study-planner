@@ -787,6 +787,42 @@ function getDateKey(dateValue) {
   return formatDateKey(date);
 }
 
+function getDateLabel(date) {
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+  });
+}
+
+function getRecentActivityTrend(dayCount = 7) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const completedSessions = getCompletedSessions();
+  const quizHistory = getQuizHistory();
+  const days = Array.from({ length: dayCount }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (dayCount - index - 1));
+    const dateKey = getDateKey(date);
+    const minutes = completedSessions
+      .filter((session) => getDateKey(session.completedAt) === dateKey)
+      .reduce((total, session) => total + (Number(session.minutes) || 0), 0);
+    const quizAttempts = quizHistory.filter((attempt) => getDateKey(attempt.answeredAt) === dateKey).length;
+
+    return {
+      dateKey,
+      label: getDateLabel(date),
+      minutes,
+      quizAttempts,
+      totalActivity: minutes + quizAttempts * 10,
+    };
+  });
+  const maxActivity = Math.max(1, ...days.map((day) => day.totalActivity));
+
+  return days.map((day) => ({
+    ...day,
+    intensity: Math.max(6, Math.round((day.totalActivity / maxActivity) * 100)),
+  }));
+}
+
 function getStudyStreak() {
   const completedDates = new Set(getCompletedSessions().map((session) => getDateKey(session.completedAt)));
 
@@ -1720,10 +1756,36 @@ function renderProgressInsights() {
   const reviewNext = document.querySelector("#reviewNext");
   const spacedReviewList = document.querySelector("#spacedReviewList");
   const sessionLog = document.querySelector("#sessionLog");
+  const activityTrend = document.querySelector("#activityTrend");
+  const trendDays = getRecentActivityTrend();
 
   document.querySelector("#avgConfidence").textContent = `${getAverageConfidence()}%`;
   document.querySelector("#studyStreak").textContent = getStudyStreak();
   document.querySelector("#completedSessionCount").textContent = completedSessions.length;
+
+  activityTrend.innerHTML = `
+    <div class="activity-trend-header">
+      <strong>7-day activity</strong>
+      <span>${trendDays.reduce((total, day) => total + day.minutes, 0)} min - ${trendDays.reduce(
+        (total, day) => total + day.quizAttempts,
+        0,
+      )} quiz</span>
+    </div>
+    <div class="activity-bars">
+      ${trendDays
+        .map(
+          (day) => `
+            <div class="activity-day">
+              <span>${escapeHTML(day.label)}</span>
+              <div class="activity-bar" title="${day.minutes} min, ${day.quizAttempts} quiz">
+                <i style="height: ${day.intensity}%"></i>
+              </div>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 
   reviewNext.innerHTML = nextReview
     ? `
@@ -2098,6 +2160,7 @@ function buildStudyReport() {
   const completedSessions = getCompletedSessions().sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
   );
+  const activityTrend = getRecentActivityTrend();
   const readiness = buildReadinessSnapshot();
   const generatedAt = new Date().toLocaleString();
 
@@ -2121,6 +2184,10 @@ function buildStudyReport() {
     `- Quiz accuracy: ${getQuizAccuracy(quizHistory)}% across ${quizHistory.length} attempt(s)`,
     `- Study streak: ${getStudyStreak()} day(s)`,
     `- Readiness: ${readiness.score}% (${readiness.readinessLabel})`,
+    "",
+    "## 7-Day Activity",
+    "",
+    ...activityTrend.map((day) => `- ${day.label}: ${day.minutes} study min, ${day.quizAttempts} quiz attempt(s)`),
     "",
     "## Readiness",
     "",

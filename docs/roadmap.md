@@ -27,6 +27,7 @@
 - [x] Feed completed sessions back into topic confidence
 - [x] Show progress insights for confidence, streak, and recent sessions
 - [x] Add exam readiness scoring with recommended next moves
+- [x] Show 7-day activity trend for study and quiz momentum
 - [x] Add spaced repetition review queue for due topics
 - [x] Export a Markdown study report from local planner data
 - [x] Add JSON backup/import and seeded demo restore controls

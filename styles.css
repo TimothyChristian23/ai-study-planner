@@ -816,6 +816,68 @@ textarea {
   font-size: 0.84rem;
 }
 
+.activity-trend {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.activity-trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.activity-trend-header strong,
+.activity-trend-header span {
+  display: block;
+}
+
+.activity-trend-header span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.activity-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.activity-day {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.activity-day > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.activity-bar {
+  height: 78px;
+  border-radius: 8px;
+  background: #e8eef7;
+  display: flex;
+  align-items: end;
+  overflow: hidden;
+}
+
+.activity-bar i {
+  display: block;
+  width: 100%;
+  min-height: 6px;
+  border-radius: inherit;
+  background: var(--teal);
+}
+
 .review-next {
   border-left: 4px solid var(--teal);
   border-radius: 8px;
