@@ -18,6 +18,7 @@
 - [x] Respect preferred study days and start time in schedules
 - [x] Generate source-backed quiz cards from indexed material text
 - [x] Add answer reveal with material source attribution
+- [x] Track quiz attempt history and accuracy
 - [x] Add local passage retrieval for material-grounded answers
 - [x] Show grounding confidence and cited source excerpts
 - [x] Track completed study sessions and minutes studied

@@ -143,6 +143,7 @@ const defaultState = {
   schedule: [],
   topicProgress: {},
   completedSessions: {},
+  quizHistory: [],
   focusSession: {
     selectedSessionId: "",
     secondsRemaining: null,
@@ -206,6 +207,18 @@ function normalizeState(rawState = {}) {
   merged.schedule = Array.isArray(merged.schedule) ? merged.schedule.map(withSessionId) : [];
   merged.topicProgress = merged.topicProgress || {};
   merged.completedSessions = merged.completedSessions || {};
+  merged.quizHistory = (merged.quizHistory || [])
+    .map((attempt) => ({
+      ...attempt,
+      id: attempt.id || makeId(),
+      topic: attempt.topic || "General review",
+      question: attempt.question || "Quiz attempt",
+      source: attempt.source || "No source",
+      result: attempt.result === "hit" ? "hit" : "miss",
+      confidenceAfter: Number(attempt.confidenceAfter) || 0,
+      answeredAt: attempt.answeredAt || new Date().toISOString(),
+    }))
+    .slice(0, 50);
   const rawFocusSession = rawState.focusSession || {};
   const rawSecondsRemaining = Number(rawFocusSession.secondsRemaining);
   merged.focusSession = {
@@ -801,6 +814,51 @@ function getAverageConfidence() {
   const total = topics.reduce((sum, topic) => sum + topic.score, 0);
 
   return Math.round(total / topics.length);
+}
+
+function getQuizHistory() {
+  return [...(state.quizHistory || [])].sort(
+    (a, b) => new Date(b.answeredAt).getTime() - new Date(a.answeredAt).getTime(),
+  );
+}
+
+function getQuizAccuracy(history = getQuizHistory()) {
+  if (!history.length) {
+    return 0;
+  }
+
+  const hits = history.filter((attempt) => attempt.result === "hit").length;
+
+  return Math.round((hits / history.length) * 100);
+}
+
+function getQuizStreak(history = getQuizHistory()) {
+  let streak = 0;
+
+  for (const attempt of history) {
+    if (attempt.result !== "hit") {
+      break;
+    }
+
+    streak += 1;
+  }
+
+  return streak;
+}
+
+function recordQuizAttempt(question, wasHit, confidenceAfter) {
+  state.quizHistory = [
+    {
+      id: makeId(),
+      topic: question.topic,
+      question: question.question,
+      source: question.source,
+      result: wasHit ? "hit" : "miss",
+      confidenceAfter: Math.round(confidenceAfter),
+      answeredAt: new Date().toISOString(),
+    },
+    ...(state.quizHistory || []),
+  ].slice(0, 50);
 }
 
 function getReviewIntervalDays(topic) {
@@ -1654,6 +1712,31 @@ function renderQuestion() {
   document.querySelector("#quizItemCount").textContent = questions.length;
 }
 
+function renderQuizInsights() {
+  const history = getQuizHistory();
+
+  document.querySelector("#quizAccuracy").textContent = `${getQuizAccuracy(history)}%`;
+  document.querySelector("#quizAttemptCount").textContent = history.length;
+  document.querySelector("#quizStreak").textContent = getQuizStreak(history);
+  document.querySelector("#quizHistory").innerHTML = history.length
+    ? history
+        .slice(0, 5)
+        .map(
+          (attempt) => `
+            <div class="quiz-history-item ${attempt.result === "hit" ? "is-hit" : "is-miss"}">
+              <div>
+                <strong>${escapeHTML(attempt.topic)}</strong>
+                <span>${escapeHTML(attempt.source)} - ${formatCompletedAt(attempt.answeredAt)}</span>
+                <p>${escapeHTML(attempt.question)}</p>
+              </div>
+              <em>${attempt.result === "hit" ? "Got it" : "Review"}</em>
+            </div>
+          `,
+        )
+        .join("")
+    : `<p class="empty-state">No quiz attempts yet.</p>`;
+}
+
 function renderCourse() {
   document.querySelector("#courseName").value = state.course.name;
   document.querySelector("#examDate").value = state.course.examDate;
@@ -1703,6 +1786,7 @@ function renderAll() {
   renderProgressInsights();
   renderReadinessInsights();
   renderQuestion();
+  renderQuizInsights();
   renderMetrics();
   syncFocusTicker();
   saveState();
@@ -1908,6 +1992,7 @@ function buildStudyReport() {
   const suggestedDeadlines = state.suggestedDeadlines || [];
   const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
   const spacedReviews = getSpacedReviewItems();
+  const quizHistory = getQuizHistory();
   const completedSessions = getCompletedSessions().sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
   );
@@ -1931,6 +2016,7 @@ function buildStudyReport() {
     `- Quiz cards: ${buildQuestions().length}`,
     `- Completed study minutes: ${getCompletedStudyMinutes()}`,
     `- Average confidence: ${getAverageConfidence()}%`,
+    `- Quiz accuracy: ${getQuizAccuracy(quizHistory)}% across ${quizHistory.length} attempt(s)`,
     `- Study streak: ${getStudyStreak()} day(s)`,
     `- Readiness: ${readiness.score}% (${readiness.readinessLabel})`,
     "",
@@ -1980,6 +2066,15 @@ function buildStudyReport() {
       (topic) =>
         `- ${topic.name}: ${topic.score}% confidence, ${topic.priority} priority, ${topic.attempts} quiz attempt(s), ${topic.studySessions} study session(s)`,
       "No topic progress yet.",
+    ),
+    "",
+    "## Recent Quiz Attempts",
+    "",
+    ...formatReportLineItems(
+      quizHistory.slice(0, 8),
+      (attempt) =>
+        `- ${attempt.topic}: ${attempt.result === "hit" ? "Got it" : "Needs review"} - ${attempt.source} - ${formatCompletedAt(attempt.answeredAt)}`,
+      "No quiz attempts yet.",
     ),
     "",
     "## Spaced Review Queue",
@@ -2464,6 +2559,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
     schedule: [],
     topicProgress: {},
     completedSessions: {},
+    quizHistory: [],
     questionIndex: 0,
   };
   quizAnswerVisible = false;
@@ -2500,6 +2596,7 @@ document.querySelector(".answer-row").addEventListener("click", (event) => {
   progress.misses += wasHit ? 0 : 1;
   progress.confidence = Math.max(5, Math.min(100, progress.confidence + (wasHit ? 9 : -14)));
   progress.lastReviewedAt = new Date().toISOString();
+  recordQuizAttempt(current, wasHit, progress.confidence);
   state.questionIndex += 1;
   quizAnswerVisible = false;
 

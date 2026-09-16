@@ -81,6 +81,17 @@ This document captures the local data shape used by the static prototype and the
       notes: "Reworked BFS queue examples."
     }
   },
+  quizHistory: [
+    {
+      id: "uuid",
+      topic: "Graph traversal",
+      question: "Explain how \"bfs\" is used in this source.",
+      source: "Lecture 7 - Graph Traversal.txt",
+      result: "hit",
+      confidenceAfter: 67,
+      answeredAt: "2026-09-14T19:15:00.000Z"
+    }
+  ],
   focusSession: {
     selectedSessionId: "Sep 15|Repair weak spot: Graph traversal|Graph traversal",
     secondsRemaining: 1800,
@@ -186,6 +197,16 @@ This document captures the local data shape used by the static prototype and the
 - `source_material_name`
 - `source_excerpt`
 - `created_at`
+
+### quiz_attempts
+
+- `id`
+- `course_id`
+- `quiz_item_id`
+- `topic`
+- `result`
+- `confidence_after`
+- `answered_at`
 
 ### topic_progress
 

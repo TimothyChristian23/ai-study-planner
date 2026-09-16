@@ -23,6 +23,7 @@ This repo currently includes a dependency-free static prototype with the first f
 - Downloadable Markdown study report with plan, deadlines, weak topics, reviews, and activity
 - JSON backup/import controls for moving local planner data between browsers or restoring demos
 - Source-backed quiz cards generated from indexed course materials
+- Quiz attempt history with accuracy, streak, and recent results
 - Weak-topic tracker with priority levels
 - Quiz feedback that changes topic confidence and reprioritizes the plan
 - Material-grounded answer panel with passage retrieval and citations

@@ -945,6 +945,84 @@ textarea {
   gap: 10px;
 }
 
+.quiz-performance {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.quiz-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quiz-stats div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.quiz-stats strong {
+  display: block;
+  color: var(--blue);
+  font-size: 1.3rem;
+}
+
+.quiz-stats span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.quiz-history {
+  display: grid;
+  gap: 10px;
+}
+
+.quiz-history-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.quiz-history-item strong,
+.quiz-history-item span,
+.quiz-history-item p {
+  display: block;
+}
+
+.quiz-history-item span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.quiz-history-item p {
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.quiz-history-item em {
+  align-self: flex-start;
+  border-radius: 999px;
+  background: #f7e8ec;
+  color: var(--rose);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.quiz-history-item.is-hit em {
+  background: #dff5f1;
+  color: var(--teal);
+}
+
 .topic-item {
   align-items: stretch;
   flex-direction: column;
@@ -1042,6 +1120,7 @@ textarea {
   .panel-header,
   .metric-row,
   .progress-summary,
+  .quiz-stats,
   .readiness-factors,
   .focus-actions,
   .setup-form,
@@ -1063,6 +1142,7 @@ textarea {
   .file-list li,
   .deadline-item,
   .suggestion-item,
+  .quiz-history-item,
   .spaced-review-item,
   .session-log-item,
   .schedule-item {
