@@ -14,27 +14,30 @@ This document tracks the path from the deployed static prototype to a production
 ## Foundation Added
 
 - `.env.example` for browser-safe Supabase values and server-only OpenAI secrets
+- `config.js` for browser-safe Supabase URL and anon key configuration
 - `supabase/migrations/0001_initial_schema.sql` for courses, materials, chunks, schedules, quizzes, progress, answers, citations, storage bucket, RLS policies, and a vector search RPC
 - `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and OpenAI Responses
+- Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
 
 ## Setup Steps
 
 1. Create a Supabase project.
 2. Copy `.env.example` to `.env.local` and fill in browser-safe Supabase values for local frontend work.
-3. Install and log in to the Supabase CLI.
-4. Link the project:
+3. Update `config.js` with the Supabase project URL and anon/publishable key for the deployed static frontend.
+4. Install and log in to the Supabase CLI.
+5. Link the project:
 
    ```powershell
    supabase link --project-ref your-project-ref
    ```
 
-5. Apply the database migration:
+6. Apply the database migration:
 
    ```powershell
    supabase db push
    ```
 
-6. Set Edge Function secrets:
+7. Set Edge Function secrets:
 
    ```powershell
    supabase secrets set OPENAI_API_KEY=sk-proj-your-key
@@ -42,7 +45,7 @@ This document tracks the path from the deployed static prototype to a production
    supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
    ```
 
-7. Deploy the first Edge Function:
+8. Deploy the first Edge Function:
 
    ```powershell
    supabase functions deploy ask-materials
@@ -50,12 +53,11 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add a Supabase client module and auth UI to the frontend.
-2. Replace `localStorage` courses/materials/deadlines with Supabase-backed records.
-3. Upload source files to the `course-materials` bucket.
-4. Add a parsing/indexing function that extracts text, chunks it, embeds it, and writes `material_chunks`.
-5. Route the `Ask materials` panel through `ask-materials`.
-6. Move quiz, schedule, and progress history into Postgres tables.
+1. Replace `localStorage` courses/materials/deadlines with Supabase-backed records for signed-in users.
+2. Upload source files to the `course-materials` bucket.
+3. Add a parsing/indexing function that extracts text, chunks it, embeds it, and writes `material_chunks`.
+4. Route the `Ask materials` panel through `ask-materials`.
+5. Move quiz, schedule, and progress history into Postgres tables.
 
 ## Security Notes
 

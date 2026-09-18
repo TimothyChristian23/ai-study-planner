@@ -4,10 +4,13 @@ const MAX_PDF_PAGES = 35;
 const PDFJS_VERSION = "6.3.289";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`;
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
+const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
 
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
 let focusTimerId = null;
+let supabaseClient = null;
+let authSession = null;
 
 const stopWords = new Set([
   "about",
@@ -294,6 +297,46 @@ function escapeHTML(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function hasSupabaseConfig() {
+  return Boolean(SUPABASE_CONFIG.supabaseUrl && SUPABASE_CONFIG.supabaseAnonKey);
+}
+
+function getSupabaseClient() {
+  if (!hasSupabaseConfig() || !window.supabase?.createClient) {
+    return null;
+  }
+
+  if (!supabaseClient) {
+    supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.supabaseUrl, SUPABASE_CONFIG.supabaseAnonKey);
+  }
+
+  return supabaseClient;
+}
+
+function setAuthStatus(message) {
+  document.querySelector("#authStatus").textContent = message;
+}
+
+async function refreshAuthSession() {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    authSession = null;
+    return null;
+  }
+
+  const { data, error } = await client.auth.getSession();
+
+  if (error) {
+    console.warn(error);
+    authSession = null;
+    return null;
+  }
+
+  authSession = data.session || null;
+  return authSession;
 }
 
 function makeId() {
@@ -2019,7 +2062,39 @@ function renderMetrics() {
         : "Balanced";
 }
 
+function renderAuthPanel() {
+  const signedOut = document.querySelector("#authSignedOut");
+  const signedIn = document.querySelector("#authSignedIn");
+  const userEmail = document.querySelector("#authUserEmail");
+  const signIn = document.querySelector("#signIn");
+  const signUp = document.querySelector("#signUp");
+  const hasConfig = hasSupabaseConfig() && Boolean(window.supabase?.createClient);
+
+  signIn.disabled = !hasConfig;
+  signUp.disabled = !hasConfig;
+
+  if (!hasConfig) {
+    signedOut.hidden = false;
+    signedIn.hidden = true;
+    setAuthStatus("Add Supabase config to enable accounts.");
+    return;
+  }
+
+  if (authSession?.user?.email) {
+    signedOut.hidden = true;
+    signedIn.hidden = false;
+    userEmail.textContent = authSession.user.email;
+    setAuthStatus("Account connected.");
+    return;
+  }
+
+  signedOut.hidden = false;
+  signedIn.hidden = true;
+  setAuthStatus("Sign in to sync planner data.");
+}
+
 function renderAll() {
+  renderAuthPanel();
   renderCourse();
   renderMaterials();
   renderDeadlines();
@@ -2034,6 +2109,38 @@ function renderAll() {
   renderMetrics();
   syncFocusTicker();
   saveState();
+}
+
+async function handleAuthAction(mode) {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    setAuthStatus("Add Supabase config to enable accounts.");
+    return;
+  }
+
+  const email = document.querySelector("#authEmail").value.trim();
+  const password = document.querySelector("#authPassword").value;
+
+  if (!email || !password) {
+    setAuthStatus("Email and password are required.");
+    return;
+  }
+
+  setAuthStatus(mode === "sign-up" ? "Creating account..." : "Signing in...");
+
+  const result =
+    mode === "sign-up"
+      ? await client.auth.signUp({ email, password })
+      : await client.auth.signInWithPassword({ email, password });
+
+  if (result.error) {
+    setAuthStatus(result.error.message);
+    return;
+  }
+
+  await refreshAuthSession();
+  renderAuthPanel();
 }
 
 async function addFiles(files) {
@@ -2996,6 +3103,32 @@ document.querySelector("#exportReport").addEventListener("click", () => {
   document.querySelector("#exportStatus").textContent = `Exported ${fileName}`;
 });
 
+document.querySelector("#signIn").addEventListener("click", () => {
+  handleAuthAction("sign-in");
+});
+
+document.querySelector("#signUp").addEventListener("click", () => {
+  handleAuthAction("sign-up");
+});
+
+document.querySelector("#signOut").addEventListener("click", async () => {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    return;
+  }
+
+  const { error } = await client.auth.signOut();
+
+  if (error) {
+    setAuthStatus(error.message);
+    return;
+  }
+
+  authSession = null;
+  renderAuthPanel();
+});
+
 document.querySelector("#answerQuestion").addEventListener("click", () => {
   const question = document.querySelector("#studyQuestion").value.trim();
   const result = answerFromMaterials(question);
@@ -3019,4 +3152,9 @@ document.querySelector("#answerQuestion").addEventListener("click", () => {
   saveState();
 });
 
+refreshAuthSession().then(renderAuthPanel);
+getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
+  authSession = session;
+  renderAuthPanel();
+});
 renderAll();

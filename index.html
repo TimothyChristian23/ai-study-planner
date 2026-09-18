@@ -27,6 +27,23 @@
           <a href="#progress">Progress</a>
         </nav>
 
+        <section class="auth-panel" id="account">
+          <p class="label">Account</p>
+          <div class="auth-signed-out" id="authSignedOut">
+            <input id="authEmail" type="email" placeholder="student@example.com" autocomplete="email" />
+            <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" />
+            <div class="auth-actions">
+              <button class="secondary-button" type="button" id="signIn">Sign in</button>
+              <button class="secondary-button" type="button" id="signUp">Create</button>
+            </div>
+          </div>
+          <div class="auth-signed-in" id="authSignedIn" hidden>
+            <strong id="authUserEmail">Signed in</strong>
+            <button class="secondary-button quiet-button" type="button" id="signOut">Sign out</button>
+          </div>
+          <p class="auth-status" id="authStatus" aria-live="polite"></p>
+        </section>
+
         <section class="mini-panel">
           <p class="label">Next deadline</p>
           <strong id="nextExamCourse">Data Structures</strong>
@@ -357,6 +374,8 @@
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

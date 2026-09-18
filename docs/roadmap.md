@@ -37,7 +37,8 @@
 ## Phase 2: Functional MVP
 
 - [x] Scaffold Supabase schema, storage, RLS policies, and Edge Function foundation
-- [ ] Add authentication UI
+- [x] Add authentication UI
+- [ ] Connect authenticated sessions to persisted planner records
 - [ ] Store courses, deadlines, assignments, and study sessions
 - [ ] Parse uploaded PDFs and text files server-side
 - [ ] Persist generated schedules from deadlines and available study time

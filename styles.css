@@ -148,6 +148,68 @@ h4 {
   padding: 18px;
 }
 
+.auth-panel {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.auth-signed-out,
+.auth-signed-in {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-signed-out[hidden],
+.auth-signed-in[hidden] {
+  display: none;
+}
+
+.auth-panel input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.auth-panel input::placeholder {
+  color: #9fb0c6;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-panel .secondary-button {
+  min-height: 38px;
+  padding: 9px 10px;
+}
+
+.auth-panel .secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.auth-panel .quiet-button {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #dce6f5;
+}
+
+.auth-status {
+  min-height: 34px;
+  margin: 0;
+  color: #b8c4d5;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .mini-panel strong,
 .mini-panel span {
   display: block;
@@ -1310,6 +1372,19 @@ textarea {
     padding: 12px 14px;
   }
 
+  .auth-panel {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
+    align-items: start;
+    gap: 10px 16px;
+    padding: 12px 14px;
+  }
+
+  .auth-panel .label,
+  .auth-status {
+    grid-column: 1 / -1;
+  }
+
   .mini-panel .label {
     grid-column: 1 / -1;
   }
@@ -1403,6 +1478,11 @@ textarea {
     display: grid;
     grid-template-columns: 1fr;
     gap: 6px;
+    width: 100%;
+  }
+
+  .auth-panel {
+    grid-template-columns: 1fr;
     width: 100%;
   }
 
