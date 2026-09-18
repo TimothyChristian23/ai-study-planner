@@ -22,6 +22,7 @@ This document tracks the path from the deployed static prototype to a production
 - Manual sync/load controls for signed-in users to persist course setup, material metadata, deadlines, schedules, progress, quiz attempts, and answer history
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
+- The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
 
 ## Setup Steps
 
@@ -58,11 +59,11 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Route the `Ask materials` panel through `ask-materials`.
-2. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
-3. Move quiz generation from local heuristics to retrieved material chunks.
-4. Add signed download/reprocess tools for stored course files.
-5. Add background retries and index status fields for longer documents.
+1. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
+2. Move quiz generation from local heuristics to retrieved material chunks.
+3. Add signed download/reprocess tools for stored course files.
+4. Add background retries and index status fields for longer documents.
+5. Add saved cloud answer hydration so server-created answers appear after load without duplication.
 
 ## Security Notes
 

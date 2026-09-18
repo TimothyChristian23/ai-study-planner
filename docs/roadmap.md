@@ -49,9 +49,9 @@
 
 - [x] Add vector-ready material chunk schema and material Q&A function shell
 - [x] Chunk and embed course materials
-- [ ] Retrieve relevant passages for user questions
+- [x] Retrieve relevant passages for user questions
 - [ ] Generate quizzes from selected materials
-- [ ] Cite source documents in AI answers
+- [x] Cite source documents in AI answers
 
 ## Phase 4: Adaptive Learning
 

@@ -849,6 +849,114 @@ async function indexMaterialInCloud(material) {
   }
 }
 
+function canUseCloudAnswers() {
+  return Boolean(getSupabaseClient() && authSession?.user?.id);
+}
+
+function renderAnswerResult(result) {
+  const sourceList = document.querySelector("#sourceList");
+
+  document.querySelector("#answerBox").textContent = result.answer;
+  document.querySelector("#answerConfidence").textContent = result.grounding;
+  sourceList.innerHTML = result.citations
+    .map(
+      (citation) => `
+        <article class="citation-card">
+          <strong>${escapeHTML(citation.source)}</strong>
+          <span>${escapeHTML(citation.topic)} - match ${citation.score}</span>
+          <p>${escapeHTML(citation.snippet)}</p>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+async function answerFromCloudMaterials(question) {
+  const client = getSupabaseClient();
+
+  if (!client || !authSession?.user?.id) {
+    return null;
+  }
+
+  setAuthStatus("Searching indexed cloud materials...");
+  const synced = await syncPlannerToCloud();
+
+  if (!synced) {
+    throw new Error("Could not sync planner metadata before cloud Q&A.");
+  }
+
+  const course = await getCloudCourse(client);
+
+  if (!course?.id) {
+    throw new Error("Cloud course was not found. Sync the planner first.");
+  }
+
+  const { data, error } = await client.functions.invoke("ask-materials", {
+    body: {
+      courseId: course.id,
+      question,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  return {
+    answer: data?.answer || "I could not generate a grounded answer from indexed cloud material.",
+    grounding: data?.grounding || "Grounding: none",
+    citations: Array.isArray(data?.citations) ? data.citations.map(normalizeAnswerCitation) : [],
+  };
+}
+
+async function answerStudyQuestion() {
+  const question = document.querySelector("#studyQuestion").value.trim();
+  const answerButton = document.querySelector("#answerQuestion");
+  const canUseCloud = canUseCloudAnswers();
+  let result = null;
+
+  if (!question) {
+    renderAnswerResult(answerFromMaterials(question));
+    return;
+  }
+
+  answerButton.disabled = true;
+  document.querySelector("#answerBox").textContent = canUseCloud
+    ? "Searching indexed cloud materials..."
+    : "Searching local materials...";
+  document.querySelector("#answerConfidence").textContent = canUseCloud
+    ? "Grounding: cloud retrieval pending"
+    : "Grounding: local retrieval pending";
+  document.querySelector("#sourceList").innerHTML = "";
+
+  try {
+    result = canUseCloud ? await answerFromCloudMaterials(question) : null;
+
+    if (result) {
+      setAuthStatus("Answered from indexed cloud materials.");
+    }
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(error?.message || "Cloud answer failed; using local materials.");
+    result = null;
+  } finally {
+    answerButton.disabled = false;
+  }
+
+  if (!result) {
+    result = answerFromMaterials(question);
+  }
+
+  renderAnswerResult(result);
+  recordAnswerHistory(question, result);
+  renderAnswerHistory();
+  saveState();
+}
+
 async function readCourseRows(client, table, courseId, orderColumn = "created_at") {
   const { data, error } = await client.from(table).select("*").eq("course_id", courseId).order(orderColumn);
 
@@ -3911,28 +4019,7 @@ document.querySelector("#signOut").addEventListener("click", async () => {
   renderAuthPanel();
 });
 
-document.querySelector("#answerQuestion").addEventListener("click", () => {
-  const question = document.querySelector("#studyQuestion").value.trim();
-  const result = answerFromMaterials(question);
-  const sourceList = document.querySelector("#sourceList");
-
-  document.querySelector("#answerBox").textContent = result.answer;
-  document.querySelector("#answerConfidence").textContent = result.grounding;
-  sourceList.innerHTML = result.citations
-    .map(
-      (citation) => `
-        <article class="citation-card">
-          <strong>${escapeHTML(citation.source)}</strong>
-          <span>${escapeHTML(citation.topic)} - match ${citation.score}</span>
-          <p>${escapeHTML(citation.snippet)}</p>
-        </article>
-      `,
-    )
-    .join("");
-  recordAnswerHistory(question, result);
-  renderAnswerHistory();
-  saveState();
-});
+document.querySelector("#answerQuestion").addEventListener("click", answerStudyQuestion);
 
 refreshAuthSession().then(renderAuthPanel);
 getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
