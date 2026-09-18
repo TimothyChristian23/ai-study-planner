@@ -278,7 +278,8 @@ This document captures the local data shape used by the static prototype and the
 - Material search uses local indexed text and file metadata until server-side parsing lands; signed-in uploads send raw files to private Supabase Storage.
 - Manual cloud sync uses `client_id` columns so the static frontend can update the same Supabase rows instead of creating duplicates.
 - Signed-in uploads store raw files in the private `course-materials` bucket and save `storage_path` on material records.
-- Cloud loading restores planner metadata and history, but searchable source text remains local until server-side parsing and indexing are connected.
+- The `index-material` Edge Function downloads stored PDFs and text-like files, extracts text, writes searchable `material_chunks`, and stores OpenAI embeddings.
+- Cloud loading restores planner metadata and history; local source search still uses browser-indexed text until the frontend answer panel is routed through cloud retrieval.
 - Activity trends are derived from `completedSessions` and `quizHistory`; they are not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

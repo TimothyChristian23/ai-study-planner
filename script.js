@@ -789,6 +789,66 @@ async function syncPlannerToCloud() {
   }
 }
 
+async function indexMaterialInCloud(material) {
+  const client = getAuthenticatedSupabaseClient();
+
+  if (!client) {
+    return;
+  }
+
+  if (!material?.storagePath) {
+    setAuthStatus("Upload this material to cloud storage before indexing.");
+    return;
+  }
+
+  const uploadStatus = document.querySelector("#uploadStatus");
+  uploadStatus.textContent = `Preparing ${material.name} for indexing...`;
+
+  const synced = await syncPlannerToCloud();
+
+  if (!synced) {
+    uploadStatus.textContent = "Could not sync material metadata before indexing.";
+    return;
+  }
+
+  uploadStatus.textContent = `Indexing ${material.name}...`;
+
+  try {
+    const { data, error } = await client.functions.invoke("index-material", {
+      body: {
+        courseClientId: DEFAULT_CLOUD_COURSE_CLIENT_ID,
+        materialClientId: material.id,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const status = data?.status || `Indexed ${data?.chunkCount || 0} chunks`;
+    state.materials = state.materials.map((item) =>
+      item.id === material.id
+        ? {
+            ...item,
+            status,
+            cloudStatus: status,
+            pageCount: Number(data?.pageCount) || item.pageCount || 0,
+            indexedPages: Number(data?.pageCount) || item.indexedPages || 0,
+          }
+        : item,
+    );
+
+    saveState();
+    renderAll();
+    uploadStatus.textContent = `${material.name} indexed into ${data?.chunkCount || 0} searchable chunks.`;
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(error?.message || "Could not index this material.");
+    uploadStatus.textContent = "Cloud indexing failed. Check Supabase function deployment and secrets.";
+    renderAuthPanel();
+  }
+}
+
 async function readCourseRows(client, table, courseId, orderColumn = "created_at") {
   const { data, error } = await client.from(table).select("*").eq("course_id", courseId).order(orderColumn);
 
@@ -2304,6 +2364,11 @@ function renderMaterials() {
           </div>
           <div class="file-actions">
             <em>${escapeHTML(item.status)}</em>
+            ${
+              item.storagePath && canUseCloudStorage()
+                ? `<button class="index-material-button" type="button" data-index-id="${escapeHTML(item.id)}">Index</button>`
+                : ""
+            }
             <button type="button" data-remove-id="${escapeHTML(item.id)}" aria-label="Remove ${escapeHTML(item.name)}">Remove</button>
           </div>
         </li>
@@ -3521,7 +3586,18 @@ document.querySelector("#dropZone").addEventListener("keydown", (event) => {
 });
 
 document.querySelector("#fileList").addEventListener("click", async (event) => {
+  const indexButton = event.target.closest("[data-index-id]");
   const removeButton = event.target.closest("[data-remove-id]");
+
+  if (indexButton) {
+    const material = state.materials.find((item) => item.id === indexButton.dataset.indexId);
+
+    if (material) {
+      await indexMaterialInCloud(material);
+    }
+
+    return;
+  }
 
   if (!removeButton) {
     return;

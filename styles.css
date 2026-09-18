@@ -612,6 +612,11 @@ textarea {
   font-size: 0.78rem;
 }
 
+.file-actions .index-material-button {
+  background: #e1f4f1;
+  color: var(--teal);
+}
+
 .deadline-list {
   display: grid;
   gap: 10px;

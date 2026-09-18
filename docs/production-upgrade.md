@@ -21,6 +21,7 @@ This document tracks the path from the deployed static prototype to a production
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
 - Manual sync/load controls for signed-in users to persist course setup, material metadata, deadlines, schedules, progress, quiz attempts, and answer history
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
+- `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
 
 ## Setup Steps
 
@@ -48,19 +49,20 @@ This document tracks the path from the deployed static prototype to a production
    supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
    ```
 
-8. Deploy the first Edge Function:
+8. Deploy the Edge Functions:
 
    ```powershell
    supabase functions deploy ask-materials
+   supabase functions deploy index-material
    ```
 
 ## Next Implementation Steps
 
-1. Add a parsing/indexing function that extracts text from stored files, chunks it, embeds it, and writes `material_chunks`.
-2. Route the `Ask materials` panel through `ask-materials`.
-3. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
-4. Move quiz generation from local heuristics to retrieved material chunks.
-5. Add signed download/reprocess tools for stored course files.
+1. Route the `Ask materials` panel through `ask-materials`.
+2. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
+3. Move quiz generation from local heuristics to retrieved material chunks.
+4. Add signed download/reprocess tools for stored course files.
+5. Add background retries and index status fields for longer documents.
 
 ## Security Notes
 

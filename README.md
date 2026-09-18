@@ -28,7 +28,7 @@ This is a dependency-free static prototype focused on the core product workflow:
 
 Future full-stack work would deepen the auth-backed experience with durable file storage, server-side parsing, embeddings, autosave, and AI-generated answers over retrieved material chunks.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, vector search RPC, an auth-ready browser shell, manual cloud sync/load controls, and an authenticated `ask-materials` Edge Function that calls OpenAI server-side.
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, server-side material indexing, vector search RPC, an auth-ready browser shell, manual cloud sync/load controls, and authenticated Edge Functions that call OpenAI server-side.
 
 ## Current Prototype
 
@@ -61,6 +61,7 @@ This repo currently includes:
 - Supabase-auth-ready account panel with sign in, sign up, and sign out controls
 - Manual Supabase sync/load path for course setup, materials metadata, deadlines, schedules, progress, quiz attempts, and grounded question history
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
+- Server-side material indexing function for stored PDFs and text-like files, including chunking and OpenAI embeddings
 - Responsive dashboard layout with mobile-friendly navigation and controls
 
 For the most reliable PDF indexing, run a local static server and open the served URL:

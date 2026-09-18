@@ -41,14 +41,14 @@
 - [x] Connect authenticated sessions to persisted planner records
 - [x] Store courses, deadlines, assignments, and study sessions
 - [x] Upload source files to private Supabase Storage
-- [ ] Parse uploaded PDFs and text files server-side
+- [x] Parse uploaded PDFs and text files server-side
 - [x] Persist generated schedules from deadlines and available study time
 - [ ] Replace manual sync/load with autosave and conflict handling
 
 ## Phase 3: AI Study Engine
 
 - [x] Add vector-ready material chunk schema and material Q&A function shell
-- [ ] Chunk and embed course materials
+- [x] Chunk and embed course materials
 - [ ] Retrieve relevant passages for user questions
 - [ ] Generate quizzes from selected materials
 - [ ] Cite source documents in AI answers
