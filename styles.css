@@ -181,7 +181,8 @@ h4 {
   color: #9fb0c6;
 }
 
-.auth-actions {
+.auth-actions,
+.cloud-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;

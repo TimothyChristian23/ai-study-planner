@@ -26,9 +26,9 @@ https://timothychristian23.github.io/ai-study-planner/
 
 This is a dependency-free static prototype focused on the core product workflow: local material intake, planning, practice, weak-topic tracking, retrieval-style answers, and portfolio-ready exports. It runs in the browser with `localStorage` persistence, a seeded demo state, and a Supabase-auth-ready account panel that stays disabled until configured.
 
-Future full-stack work would add authentication, durable cloud storage, server-side file parsing, embeddings, and AI-generated answers over retrieved material chunks.
+Future full-stack work would deepen the auth-backed experience with durable file storage, server-side parsing, embeddings, autosave, and AI-generated answers over retrieved material chunks.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, vector search RPC, an auth-ready browser shell, and an authenticated `ask-materials` Edge Function that calls OpenAI server-side.
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, vector search RPC, an auth-ready browser shell, manual cloud sync/load controls for signed-in users, and an authenticated `ask-materials` Edge Function that calls OpenAI server-side.
 
 ## Current Prototype
 
@@ -59,6 +59,7 @@ This repo currently includes:
 - Material-grounded answer panel with passage retrieval and citations
 - Grounded answer history with recent questions and cited sources
 - Supabase-auth-ready account panel with sign in, sign up, and sign out controls
+- Manual Supabase sync/load path for course setup, materials metadata, deadlines, schedules, progress, quiz attempts, and grounded question history
 - Responsive dashboard layout with mobile-friendly navigation and controls
 
 For the most reliable PDF indexing, run a local static server and open the served URL:

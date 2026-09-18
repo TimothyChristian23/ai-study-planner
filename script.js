@@ -5,12 +5,14 @@ const PDFJS_VERSION = "6.3.289";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`;
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
+const DEFAULT_CLOUD_COURSE_CLIENT_ID = "default-course";
 
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
 let focusTimerId = null;
 let supabaseClient = null;
 let authSession = null;
+let authStatusMessage = "";
 
 const stopWords = new Set([
   "about",
@@ -316,7 +318,12 @@ function getSupabaseClient() {
 }
 
 function setAuthStatus(message) {
+  authStatusMessage = message;
   document.querySelector("#authStatus").textContent = message;
+}
+
+function clearAuthStatus() {
+  authStatusMessage = "";
 }
 
 async function refreshAuthSession() {
@@ -337,6 +344,545 @@ async function refreshAuthSession() {
 
   authSession = data.session || null;
   return authSession;
+}
+
+function getAuthenticatedSupabaseClient() {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    setAuthStatus("Add Supabase config to enable cloud sync.");
+    return null;
+  }
+
+  if (!authSession?.user?.id) {
+    setAuthStatus("Sign in before syncing planner data.");
+    return null;
+  }
+
+  return client;
+}
+
+function getCloudErrorMessage(error) {
+  return error?.message ? `Cloud sync error: ${error.message}` : "Cloud sync failed. Try again after setup is complete.";
+}
+
+function toDateInputValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? "" : formatDateKey(date);
+}
+
+function toScheduledAt(session) {
+  const dateKey = session.dateKey || formatDateKey(new Date());
+  const startTime = getPreferredStartTime();
+  const date = new Date(`${dateKey}T${startTime}:00`);
+
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function cloudCoursePayload(userId) {
+  return {
+    user_id: userId,
+    client_id: DEFAULT_CLOUD_COURSE_CLIENT_ID,
+    name: state.course.name || "Course",
+    term: "Fall semester",
+    exam_date: state.course.examDate || null,
+    daily_minutes: Number(state.course.dailyMinutes) || defaultState.course.dailyMinutes,
+    preferred_start_time: getPreferredStartTime(),
+    study_days: getStudyDays(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function getCloudCourse(client, { create = false } = {}) {
+  const userId = authSession?.user?.id;
+  const { data: existingCourse, error: existingError } = await client
+    .from("courses")
+    .select("*")
+    .eq("client_id", DEFAULT_CLOUD_COURSE_CLIENT_ID)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existingCourse || !create) {
+    return existingCourse;
+  }
+
+  const { data, error } = await client.from("courses").insert(cloudCoursePayload(userId)).select("*").single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function upsertCloudCourse(client) {
+  const userId = authSession.user.id;
+  const { data, error } = await client
+    .from("courses")
+    .upsert(cloudCoursePayload(userId), { onConflict: "user_id,client_id" })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function deleteStaleClientRows(client, table, courseId, currentClientIds) {
+  const { data, error } = await client
+    .from(table)
+    .select("id, client_id")
+    .eq("course_id", courseId)
+    .not("client_id", "is", null);
+
+  if (error) {
+    throw error;
+  }
+
+  const staleRows = (data || []).filter((row) => !currentClientIds.has(row.client_id));
+
+  for (const row of staleRows) {
+    const { error: deleteError } = await client.from(table).delete().eq("id", row.id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+  }
+}
+
+async function upsertCloudRows(client, table, courseId, rows, conflict = "course_id,client_id") {
+  await deleteStaleClientRows(
+    client,
+    table,
+    courseId,
+    new Set(rows.map((row) => row.client_id).filter(Boolean)),
+  );
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const { data, error } = await client.from(table).upsert(rows, { onConflict: conflict }).select("*");
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function syncTopicProgressRows(client, courseId, rows) {
+  const currentTopics = new Set(rows.map((row) => row.topic));
+  const { data: existingRows, error: existingError } = await client
+    .from("topic_progress")
+    .select("id, topic")
+    .eq("course_id", courseId);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  for (const row of existingRows || []) {
+    if (!currentTopics.has(row.topic)) {
+      const { error } = await client.from("topic_progress").delete().eq("id", row.id);
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const { data, error } = await client.from("topic_progress").upsert(rows, { onConflict: "course_id,topic" });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+function materialCloudRows(courseId, userId) {
+  return state.materials.map((material) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: material.id,
+    file_name: material.name,
+    file_type: material.type || "Material",
+    status: material.status || "Saved",
+    size_bytes: Number(material.size) || 0,
+    page_count: Number(material.pageCount) || 0,
+    indexed_pages: Number(material.indexedPages) || 0,
+    topics: material.topics?.length ? material.topics : ["General review"],
+    created_at: material.uploadedAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+function deadlineCloudRows(courseId, userId) {
+  return state.deadlines.map((deadline) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: deadline.id,
+    title: deadline.title,
+    type: deadline.type || "Assignment",
+    due_date: deadline.dueDate,
+    topic: deadline.topic || "General review",
+    completed: Boolean(deadline.completed),
+    created_at: deadline.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+function studySessionCloudRows(courseId, userId) {
+  return state.schedule.map((session) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: session.id,
+    scheduled_for: toScheduledAt(session),
+    duration_minutes: parseSessionMinutes(session.time),
+    focus_topic: session.focus || "General review",
+    task: session.task,
+    reason: session.reason || "",
+    status: isSessionComplete(session) ? "completed" : "planned",
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+function studyLogCloudRows(courseId, userId, sessionIdByClientId) {
+  return getCompletedSessions().map((session) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: session.id,
+    study_session_id: sessionIdByClientId.get(session.id) || null,
+    focus_topic: session.focus || "General review",
+    minutes: Number(session.minutes) || 0,
+    notes: session.notes || "",
+    completed_at: session.completedAt || new Date().toISOString(),
+  }));
+}
+
+function topicProgressCloudRows(courseId, userId) {
+  return Object.entries(state.topicProgress || {}).map(([topic, progress]) => ({
+    course_id: courseId,
+    user_id: userId,
+    topic,
+    confidence_score: Math.round(Number(progress.confidence) || 0),
+    study_sessions: Number(progress.studySessions) || 0,
+    quiz_attempts: Number(progress.attempts) || 0,
+    quiz_misses: Number(progress.misses) || 0,
+    last_reviewed_at: progress.lastReviewedAt || null,
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+function quizAttemptCloudRows(courseId, userId) {
+  return (state.quizHistory || []).map((attempt) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: attempt.id,
+    topic: attempt.topic || "General review",
+    question: attempt.question || "Quiz attempt",
+    source_material_name: attempt.source || "No source",
+    result: attempt.result === "hit" ? "hit" : "miss",
+    confidence_after: Number(attempt.confidenceAfter) || 0,
+    answered_at: attempt.answeredAt || new Date().toISOString(),
+  }));
+}
+
+function materialQuestionCloudRows(courseId, userId) {
+  return (state.answerHistory || []).map((entry) => ({
+    course_id: courseId,
+    user_id: userId,
+    client_id: entry.id,
+    question: entry.question,
+    answer: entry.answer || "",
+    grounding: entry.grounding || "Grounding: none",
+    created_at: entry.askedAt || new Date().toISOString(),
+  }));
+}
+
+function answerCitationCloudRows(courseId, userId, questionIdByClientId) {
+  return (state.answerHistory || []).flatMap((entry) => {
+    const materialQuestionId = questionIdByClientId.get(entry.id);
+
+    if (!materialQuestionId) {
+      return [];
+    }
+
+    return (entry.citations || []).map((citation, index) => ({
+      course_id: courseId,
+      user_id: userId,
+      client_id: `${entry.id}-citation-${index}`,
+      material_question_id: materialQuestionId,
+      question: entry.question,
+      source_material_name: citation.source || "Uploaded material",
+      topic: citation.topic || "General review",
+      answer_excerpt: citation.snippet || "",
+      match_score: Number(citation.score) || 0,
+    }));
+  });
+}
+
+async function syncPlannerToCloud() {
+  const client = getAuthenticatedSupabaseClient();
+
+  if (!client) {
+    return;
+  }
+
+  setAuthStatus("Syncing planner to cloud...");
+
+  try {
+    const userId = authSession.user.id;
+    const course = await upsertCloudCourse(client);
+    const courseId = course.id;
+
+    await upsertCloudRows(client, "materials", courseId, materialCloudRows(courseId, userId));
+    await upsertCloudRows(client, "deadlines", courseId, deadlineCloudRows(courseId, userId));
+    const studySessions = await upsertCloudRows(
+      client,
+      "study_sessions",
+      courseId,
+      studySessionCloudRows(courseId, userId),
+    );
+    const sessionIdByClientId = new Map(studySessions.map((session) => [session.client_id, session.id]));
+
+    await upsertCloudRows(client, "study_session_logs", courseId, studyLogCloudRows(courseId, userId, sessionIdByClientId));
+    await syncTopicProgressRows(client, courseId, topicProgressCloudRows(courseId, userId));
+    await upsertCloudRows(client, "quiz_attempts", courseId, quizAttemptCloudRows(courseId, userId));
+    const materialQuestions = await upsertCloudRows(
+      client,
+      "material_questions",
+      courseId,
+      materialQuestionCloudRows(courseId, userId),
+    );
+    const questionIdByClientId = new Map(materialQuestions.map((question) => [question.client_id, question.id]));
+    await upsertCloudRows(
+      client,
+      "answer_citations",
+      courseId,
+      answerCitationCloudRows(courseId, userId, questionIdByClientId),
+    );
+
+    setAuthStatus(
+      `Synced ${state.materials.length} materials, ${state.deadlines.length} deadlines, and ${state.schedule.length} sessions.`,
+    );
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(getCloudErrorMessage(error));
+  } finally {
+    renderAuthPanel();
+  }
+}
+
+async function readCourseRows(client, table, courseId, orderColumn = "created_at") {
+  const { data, error } = await client.from(table).select("*").eq("course_id", courseId).order(orderColumn);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+function cloudSessionToLocal(session) {
+  const scheduledDate = new Date(session.scheduled_for);
+  const safeDate = Number.isNaN(scheduledDate.getTime()) ? new Date() : scheduledDate;
+
+  return withSessionId({
+    day: formatSessionDate(safeDate),
+    dateKey: formatDateKey(safeDate),
+    task: session.task,
+    time: `${Number(session.duration_minutes) || defaultState.course.dailyMinutes} min`,
+    focus: session.focus_topic || "General review",
+    reason: session.reason || "Synced from cloud",
+  });
+}
+
+function buildLoadedAnswerHistory(questions, citations) {
+  const citationsByQuestionId = new Map();
+
+  citations.forEach((citation) => {
+    const items = citationsByQuestionId.get(citation.material_question_id) || [];
+    items.push(citation);
+    citationsByQuestionId.set(citation.material_question_id, items);
+  });
+
+  return questions.map((question) => ({
+    id: question.client_id || question.id,
+    question: question.question,
+    answer: question.answer,
+    grounding: question.grounding,
+    askedAt: question.created_at,
+    citations: (citationsByQuestionId.get(question.id) || []).map((citation) => ({
+      source: citation.source_material_name || "Uploaded material",
+      topic: citation.topic || "General review",
+      snippet: citation.answer_excerpt || "",
+      score: Number(citation.match_score) || 0,
+    })),
+  }));
+}
+
+async function loadPlannerFromCloud() {
+  const client = getAuthenticatedSupabaseClient();
+
+  if (!client) {
+    return;
+  }
+
+  setAuthStatus("Loading cloud planner...");
+
+  try {
+    const course = await getCloudCourse(client);
+
+    if (!course) {
+      setAuthStatus("No cloud planner found yet. Sync this planner first.");
+      renderAuthPanel();
+      return;
+    }
+
+    const courseId = course.id;
+    const [
+      materials,
+      deadlines,
+      studySessions,
+      studyLogs,
+      topicProgressRows,
+      quizAttempts,
+      materialQuestions,
+      answerCitations,
+    ] = await Promise.all([
+      readCourseRows(client, "materials", courseId),
+      readCourseRows(client, "deadlines", courseId),
+      readCourseRows(client, "study_sessions", courseId, "scheduled_for"),
+      readCourseRows(client, "study_session_logs", courseId, "completed_at"),
+      readCourseRows(client, "topic_progress", courseId, "topic"),
+      readCourseRows(client, "quiz_attempts", courseId, "answered_at"),
+      readCourseRows(client, "material_questions", courseId),
+      readCourseRows(client, "answer_citations", courseId),
+    ]);
+    const localSchedule = studySessions.map(cloudSessionToLocal);
+    const localSessionIdByDatabaseId = new Map(
+      studySessions.map((session, index) => [session.id, localSchedule[index].id]),
+    );
+    const completedSessions = {};
+
+    studySessions.forEach((session, index) => {
+      if (session.status !== "completed") {
+        return;
+      }
+
+      const localSession = localSchedule[index];
+      completedSessions[localSession.id] = {
+        id: localSession.id,
+        task: localSession.task,
+        focus: localSession.focus,
+        minutes: Number(session.duration_minutes) || defaultState.course.dailyMinutes,
+        completedAt: session.updated_at || session.scheduled_for,
+        notes: "",
+      };
+    });
+
+    studyLogs.forEach((log) => {
+      const localId = localSessionIdByDatabaseId.get(log.study_session_id) || log.client_id || log.id;
+      completedSessions[localId] = {
+        id: localId,
+        task: completedSessions[localId]?.task || "Logged study session",
+        focus: log.focus_topic || completedSessions[localId]?.focus || "General review",
+        minutes: Number(log.minutes) || completedSessions[localId]?.minutes || 0,
+        completedAt: log.completed_at,
+        notes: log.notes || "",
+      };
+    });
+
+    state = normalizeState({
+      course: {
+        name: course.name,
+        examDate: toDateInputValue(course.exam_date),
+        dailyMinutes: Number(course.daily_minutes) || defaultState.course.dailyMinutes,
+        preferredStartTime: String(course.preferred_start_time || defaultState.course.preferredStartTime).slice(0, 5),
+        studyDays: course.study_days || defaultState.course.studyDays,
+      },
+      materials: materials.map((material) => ({
+        id: material.client_id || material.id,
+        name: material.file_name,
+        type: material.file_type,
+        status: material.status,
+        size: Number(material.size_bytes) || 0,
+        uploadedAt: material.created_at,
+        text: "",
+        pageCount: Number(material.page_count) || 0,
+        indexedPages: Number(material.indexed_pages) || 0,
+        topics: material.topics?.length ? material.topics : ["General review"],
+      })),
+      deadlines: deadlines.map((deadline) => ({
+        id: deadline.client_id || deadline.id,
+        title: deadline.title,
+        type: deadline.type,
+        dueDate: toDateInputValue(deadline.due_date),
+        topic: deadline.topic,
+        completed: Boolean(deadline.completed),
+        createdAt: deadline.created_at,
+      })),
+      suggestedDeadlines: [],
+      schedule: localSchedule,
+      completedSessions,
+      topicProgress: Object.fromEntries(
+        topicProgressRows.map((progress) => [
+          progress.topic,
+          {
+            confidence: Number(progress.confidence_score) || 0,
+            attempts: Number(progress.quiz_attempts) || 0,
+            misses: Number(progress.quiz_misses) || 0,
+            studySessions: Number(progress.study_sessions) || 0,
+            lastReviewedAt: progress.last_reviewed_at,
+          },
+        ]),
+      ),
+      quizHistory: quizAttempts.map((attempt) => ({
+        id: attempt.client_id || attempt.id,
+        topic: attempt.topic,
+        question: attempt.question || "Quiz attempt",
+        source: attempt.source_material_name || "No source",
+        result: attempt.result,
+        confidenceAfter: Number(attempt.confidence_after) || 0,
+        answeredAt: attempt.answered_at,
+      })),
+      answerHistory: buildLoadedAnswerHistory(materialQuestions, answerCitations),
+      materialSearchQuery: "",
+      focusSession: structuredClone(defaultState.focusSession),
+      questionIndex: 0,
+    });
+
+    saveState();
+    renderAll();
+    document.querySelector("#uploadStatus").textContent =
+      "Loaded cloud planner metadata. Re-upload source files to restore local text search until server parsing is connected.";
+    setAuthStatus(`Loaded ${state.materials.length} materials and ${state.deadlines.length} deadlines from cloud.`);
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(getCloudErrorMessage(error));
+  } finally {
+    renderAuthPanel();
+  }
 }
 
 function makeId() {
@@ -2068,15 +2614,20 @@ function renderAuthPanel() {
   const userEmail = document.querySelector("#authUserEmail");
   const signIn = document.querySelector("#signIn");
   const signUp = document.querySelector("#signUp");
+  const syncCloud = document.querySelector("#syncCloud");
+  const loadCloud = document.querySelector("#loadCloud");
   const hasConfig = hasSupabaseConfig() && Boolean(window.supabase?.createClient);
 
   signIn.disabled = !hasConfig;
   signUp.disabled = !hasConfig;
+  syncCloud.disabled = !hasConfig || !authSession?.user;
+  loadCloud.disabled = !hasConfig || !authSession?.user;
 
   if (!hasConfig) {
     signedOut.hidden = false;
     signedIn.hidden = true;
-    setAuthStatus("Add Supabase config to enable accounts.");
+    document.querySelector("#authStatus").textContent =
+      authStatusMessage || "Add Supabase config to enable accounts.";
     return;
   }
 
@@ -2084,13 +2635,13 @@ function renderAuthPanel() {
     signedOut.hidden = true;
     signedIn.hidden = false;
     userEmail.textContent = authSession.user.email;
-    setAuthStatus("Account connected.");
+    document.querySelector("#authStatus").textContent = authStatusMessage || "Account connected.";
     return;
   }
 
   signedOut.hidden = false;
   signedIn.hidden = true;
-  setAuthStatus("Sign in to sync planner data.");
+  document.querySelector("#authStatus").textContent = authStatusMessage || "Sign in to sync planner data.";
 }
 
 function renderAll() {
@@ -2139,6 +2690,7 @@ async function handleAuthAction(mode) {
     return;
   }
 
+  clearAuthStatus();
   await refreshAuthSession();
   renderAuthPanel();
 }
@@ -3111,6 +3663,9 @@ document.querySelector("#signUp").addEventListener("click", () => {
   handleAuthAction("sign-up");
 });
 
+document.querySelector("#syncCloud").addEventListener("click", syncPlannerToCloud);
+document.querySelector("#loadCloud").addEventListener("click", loadPlannerFromCloud);
+
 document.querySelector("#signOut").addEventListener("click", async () => {
   const client = getSupabaseClient();
 
@@ -3126,6 +3681,7 @@ document.querySelector("#signOut").addEventListener("click", async () => {
   }
 
   authSession = null;
+  clearAuthStatus();
   renderAuthPanel();
 });
 
@@ -3155,6 +3711,7 @@ document.querySelector("#answerQuestion").addEventListener("click", () => {
 refreshAuthSession().then(renderAuthPanel);
 getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
   authSession = session;
+  clearAuthStatus();
   renderAuthPanel();
 });
 renderAll();

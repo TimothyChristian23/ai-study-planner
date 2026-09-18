@@ -16,8 +16,10 @@ This document tracks the path from the deployed static prototype to a production
 - `.env.example` for browser-safe Supabase values and server-only OpenAI secrets
 - `config.js` for browser-safe Supabase URL and anon key configuration
 - `supabase/migrations/0001_initial_schema.sql` for courses, materials, chunks, schedules, quizzes, progress, answers, citations, storage bucket, RLS policies, and a vector search RPC
+- `supabase/migrations/0002_static_client_sync.sql` for stable client IDs used by the static frontend sync path
 - `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and OpenAI Responses
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
+- Manual sync/load controls for signed-in users to persist course setup, material metadata, deadlines, schedules, progress, quiz attempts, and answer history
 
 ## Setup Steps
 
@@ -53,11 +55,11 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Replace `localStorage` courses/materials/deadlines with Supabase-backed records for signed-in users.
-2. Upload source files to the `course-materials` bucket.
-3. Add a parsing/indexing function that extracts text, chunks it, embeds it, and writes `material_chunks`.
-4. Route the `Ask materials` panel through `ask-materials`.
-5. Move quiz, schedule, and progress history into Postgres tables.
+1. Upload source files to the `course-materials` bucket.
+2. Add a parsing/indexing function that extracts text, chunks it, embeds it, and writes `material_chunks`.
+3. Route the `Ask materials` panel through `ask-materials`.
+4. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
+5. Move quiz generation from local heuristics to retrieved material chunks.
 
 ## Security Notes
 

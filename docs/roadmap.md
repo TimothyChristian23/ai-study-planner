@@ -38,10 +38,11 @@
 
 - [x] Scaffold Supabase schema, storage, RLS policies, and Edge Function foundation
 - [x] Add authentication UI
-- [ ] Connect authenticated sessions to persisted planner records
-- [ ] Store courses, deadlines, assignments, and study sessions
+- [x] Connect authenticated sessions to persisted planner records
+- [x] Store courses, deadlines, assignments, and study sessions
 - [ ] Parse uploaded PDFs and text files server-side
-- [ ] Persist generated schedules from deadlines and available study time
+- [x] Persist generated schedules from deadlines and available study time
+- [ ] Replace manual sync/load with autosave and conflict handling
 
 ## Phase 3: AI Study Engine
 

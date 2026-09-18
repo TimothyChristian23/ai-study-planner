@@ -133,16 +133,20 @@ This document captures the local data shape used by the static prototype and the
 
 - `id`
 - `user_id`
+- `client_id`
 - `name`
 - `term`
 - `exam_date`
 - `daily_minutes`
+- `preferred_start_time`
+- `study_days`
 - `created_at`
 - `updated_at`
 
 ### materials
 
 - `id`
+- `client_id`
 - `course_id`
 - `file_name`
 - `file_type`
@@ -155,6 +159,7 @@ This document captures the local data shape used by the static prototype and the
 ### deadlines
 
 - `id`
+- `client_id`
 - `course_id`
 - `title`
 - `type`
@@ -177,17 +182,21 @@ This document captures the local data shape used by the static prototype and the
 ### answer_citations
 
 - `id`
+- `client_id`
 - `course_id`
 - `material_chunk_id`
 - `material_question_id`
 - `question`
 - `answer_excerpt`
+- `source_material_name`
+- `topic`
 - `match_score`
 - `created_at`
 
 ### material_questions
 
 - `id`
+- `client_id`
 - `course_id`
 - `question`
 - `answer`
@@ -197,6 +206,7 @@ This document captures the local data shape used by the static prototype and the
 ### study_sessions
 
 - `id`
+- `client_id`
 - `course_id`
 - `scheduled_for`
 - `duration_minutes`
@@ -207,6 +217,7 @@ This document captures the local data shape used by the static prototype and the
 ### study_session_logs
 
 - `id`
+- `client_id`
 - `study_session_id`
 - `course_id`
 - `focus_topic`
@@ -229,9 +240,12 @@ This document captures the local data shape used by the static prototype and the
 ### quiz_attempts
 
 - `id`
+- `client_id`
 - `course_id`
 - `quiz_item_id`
 - `topic`
+- `question`
+- `source_material_name`
 - `result`
 - `confidence_after`
 - `answered_at`
@@ -258,6 +272,8 @@ This document captures the local data shape used by the static prototype and the
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
 - Suggested deadlines are extracted locally from uploaded material text and kept separate until the student accepts them.
 - Material search uses local indexed text and file metadata only; no source content leaves the browser.
+- Manual cloud sync uses `client_id` columns so the static frontend can update the same Supabase rows instead of creating duplicates.
+- Cloud loading restores planner metadata and history, but uploaded source text remains local until server-side parsing and storage are connected.
 - Activity trends are derived from `completedSessions` and `quizHistory`; they are not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.
