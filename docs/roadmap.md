@@ -43,7 +43,8 @@
 - [x] Upload source files to private Supabase Storage
 - [x] Parse uploaded PDFs and text files server-side
 - [x] Persist generated schedules from deadlines and available study time
-- [ ] Replace manual sync/load with autosave and conflict handling
+- [x] Replace manual sync/load with autosave and conflict handling
+- [ ] Add per-course selection for multiple cloud planners
 
 ## Phase 3: AI Study Engine
 

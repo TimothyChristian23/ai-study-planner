@@ -7,6 +7,7 @@ const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
 const DEFAULT_CLOUD_COURSE_CLIENT_ID = "default-course";
 const MATERIAL_STORAGE_BUCKET = "course-materials";
+const CLOUD_AUTOSAVE_DELAY_MS = 1400;
 
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
@@ -14,6 +15,13 @@ let focusTimerId = null;
 let supabaseClient = null;
 let authSession = null;
 let authStatusMessage = "";
+let cloudAutosaveTimer = null;
+let cloudAutosaveInFlight = false;
+let cloudAutosaveQueued = false;
+let cloudAutosaveBlocked = false;
+let lastCloudSyncSignature = "";
+let lastCloudSeenCourseUpdatedAt = "";
+let cloudSyncBaselineConfirmed = false;
 
 const stopWords = new Set([
   "about",
@@ -298,6 +306,124 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function sortById(items) {
+  return [...items].sort((a, b) => String(a.id || "").localeCompare(String(b.id || "")));
+}
+
+function getCloudSyncSnapshot() {
+  return {
+    course: {
+      name: state.course.name || "Course",
+      examDate: state.course.examDate || "",
+      dailyMinutes: Number(state.course.dailyMinutes) || defaultState.course.dailyMinutes,
+      preferredStartTime: getPreferredStartTime(),
+      studyDays: getStudyDays(),
+    },
+    materials: sortById(state.materials || []).map((material) => ({
+      id: material.id,
+      name: material.name,
+      type: material.type || "Material",
+      status: material.status || "Saved",
+      size: Number(material.size) || 0,
+      pageCount: Number(material.pageCount) || 0,
+      indexedPages: Number(material.indexedPages) || 0,
+      storagePath: material.storagePath || "",
+      topics: material.topics || [],
+      uploadedAt: material.uploadedAt || "",
+    })),
+    deadlines: sortById(state.deadlines || []).map((deadline) => ({
+      id: deadline.id,
+      title: deadline.title,
+      type: deadline.type || "Assignment",
+      dueDate: deadline.dueDate,
+      topic: deadline.topic || "General review",
+      completed: Boolean(deadline.completed),
+      createdAt: deadline.createdAt || "",
+    })),
+    schedule: sortById(state.schedule || []).map((session) => ({
+      id: session.id,
+      day: session.day,
+      dateKey: session.dateKey,
+      task: session.task,
+      time: session.time,
+      focus: session.focus,
+      reason: session.reason || "",
+      completed: Boolean(state.completedSessions?.[session.id]),
+    })),
+    completedSessions: sortById(Object.values(state.completedSessions || {})).map((session) => ({
+      id: session.id,
+      task: session.task,
+      focus: session.focus,
+      minutes: Number(session.minutes) || 0,
+      notes: session.notes || "",
+      completedAt: session.completedAt || "",
+    })),
+    topicProgress: Object.fromEntries(
+      Object.entries(state.topicProgress || {})
+        .sort(([topicA], [topicB]) => topicA.localeCompare(topicB))
+        .map(([topic, progress]) => [
+          topic,
+          {
+            confidence: Math.round(Number(progress.confidence) || 0),
+            studySessions: Number(progress.studySessions) || 0,
+            attempts: Number(progress.attempts) || 0,
+            misses: Number(progress.misses) || 0,
+            lastReviewedAt: progress.lastReviewedAt || "",
+          },
+        ]),
+    ),
+    quizHistory: sortById(state.quizHistory || []).map((attempt) => ({
+      id: attempt.id,
+      topic: attempt.topic || "General review",
+      question: attempt.question || "Quiz attempt",
+      source: attempt.source || "No source",
+      result: attempt.result === "hit" ? "hit" : "miss",
+      confidenceAfter: Number(attempt.confidenceAfter) || 0,
+      answeredAt: attempt.answeredAt || "",
+    })),
+    answerHistory: sortById(state.answerHistory || []).map((entry) => ({
+      id: entry.id,
+      question: entry.question,
+      answer: entry.answer || "",
+      grounding: entry.grounding || "Grounding: none",
+      citations: (entry.citations || []).map(normalizeAnswerCitation),
+      askedAt: entry.askedAt || "",
+    })),
+  };
+}
+
+function getCloudSyncSignature() {
+  return JSON.stringify(getCloudSyncSnapshot());
+}
+
+function hasCloudLoadConflictRisk() {
+  return !cloudSyncBaselineConfirmed || (Boolean(lastCloudSyncSignature) && getCloudSyncSignature() !== lastCloudSyncSignature);
+}
+
+function clearCloudAutosaveTimer() {
+  if (cloudAutosaveTimer) {
+    window.clearTimeout(cloudAutosaveTimer);
+    cloudAutosaveTimer = null;
+  }
+}
+
+function markCloudSyncBaseline(course = null) {
+  lastCloudSyncSignature = getCloudSyncSignature();
+  lastCloudSeenCourseUpdatedAt = course?.updated_at || lastCloudSeenCourseUpdatedAt || "";
+  cloudSyncBaselineConfirmed = cloudSyncBaselineConfirmed || Boolean(course?.updated_at);
+  cloudAutosaveBlocked = false;
+}
+
+function resetCloudSyncTracking() {
+  clearCloudAutosaveTimer();
+  cloudAutosaveInFlight = false;
+  cloudAutosaveQueued = false;
+  cloudAutosaveBlocked = false;
+  lastCloudSyncSignature = "";
+  lastCloudSeenCourseUpdatedAt = "";
+  cloudSyncBaselineConfirmed = false;
+}
+
 function escapeHTML(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -366,6 +492,81 @@ function getAuthenticatedSupabaseClient() {
   }
 
   return client;
+}
+
+function canAutosaveToCloud() {
+  return Boolean(getSupabaseClient() && authSession?.user?.id);
+}
+
+async function shouldPauseCloudAutosaveForConflict(client) {
+  const course = await getCloudCourse(client);
+
+  if (!course) {
+    return false;
+  }
+
+  const remoteUpdatedAt = course.updated_at || "";
+
+  if (remoteUpdatedAt && remoteUpdatedAt !== lastCloudSeenCourseUpdatedAt) {
+    cloudAutosaveBlocked = true;
+    lastCloudSeenCourseUpdatedAt = remoteUpdatedAt;
+    setAuthStatus("Cloud planner exists or changed elsewhere. Load cloud, or use Sync now to overwrite it.");
+    return true;
+  }
+
+  return false;
+}
+
+async function flushCloudAutosave() {
+  cloudAutosaveTimer = null;
+
+  if (!canAutosaveToCloud() || cloudAutosaveBlocked) {
+    return;
+  }
+
+  const nextSignature = getCloudSyncSignature();
+
+  if (nextSignature === lastCloudSyncSignature) {
+    return;
+  }
+
+  if (cloudAutosaveInFlight) {
+    cloudAutosaveQueued = true;
+    return;
+  }
+
+  cloudAutosaveInFlight = true;
+
+  try {
+    const client = getSupabaseClient();
+
+    if (await shouldPauseCloudAutosaveForConflict(client)) {
+      return;
+    }
+
+    await syncPlannerToCloud({ source: "autosave" });
+  } finally {
+    cloudAutosaveInFlight = false;
+
+    if (cloudAutosaveQueued) {
+      cloudAutosaveQueued = false;
+      queueCloudAutosave("queued update");
+    }
+  }
+}
+
+function queueCloudAutosave(reason = "planner update") {
+  if (!canAutosaveToCloud() || cloudAutosaveBlocked) {
+    return;
+  }
+
+  if (getCloudSyncSignature() === lastCloudSyncSignature) {
+    return;
+  }
+
+  clearCloudAutosaveTimer();
+  setAuthStatus(`Cloud autosave pending after ${reason}...`);
+  cloudAutosaveTimer = window.setTimeout(flushCloudAutosave, CLOUD_AUTOSAVE_DELAY_MS);
 }
 
 function getCloudErrorMessage(error) {
@@ -735,14 +936,20 @@ function answerCitationCloudRows(courseId, userId, questionIdByClientId) {
   });
 }
 
-async function syncPlannerToCloud() {
+async function syncPlannerToCloud(options = {}) {
+  const source = options?.source === "autosave" ? "autosave" : "manual";
   const client = getAuthenticatedSupabaseClient();
 
   if (!client) {
     return false;
   }
 
-  setAuthStatus("Syncing planner to cloud...");
+  if (source === "manual") {
+    clearCloudAutosaveTimer();
+    cloudAutosaveBlocked = false;
+  }
+
+  setAuthStatus(source === "autosave" ? "Autosaving planner to cloud..." : "Syncing planner to cloud...");
 
   try {
     const userId = authSession.user.id;
@@ -776,8 +983,11 @@ async function syncPlannerToCloud() {
       answerCitationCloudRows(courseId, userId, questionIdByClientId),
     );
 
+    markCloudSyncBaseline(course);
     setAuthStatus(
-      `Synced ${state.materials.length} materials, ${state.deadlines.length} deadlines, and ${state.schedule.length} sessions.`,
+      source === "autosave"
+        ? `Autosaved ${state.materials.length} materials, ${state.deadlines.length} deadlines, and ${state.schedule.length} sessions.`
+        : `Synced ${state.materials.length} materials, ${state.deadlines.length} deadlines, and ${state.schedule.length} sessions.`,
     );
     return true;
   } catch (error) {
@@ -955,6 +1165,7 @@ async function answerStudyQuestion() {
   recordAnswerHistory(question, result);
   renderAnswerHistory();
   saveState();
+  queueCloudAutosave("answer history");
 }
 
 async function readCourseRows(client, table, courseId, orderColumn = "created_at") {
@@ -1012,7 +1223,9 @@ async function loadPlannerFromCloud() {
     return;
   }
 
-  setAuthStatus("Loading cloud planner...");
+  clearCloudAutosaveTimer();
+  cloudAutosaveBlocked = false;
+  setAuthStatus("Checking cloud planner...");
 
   try {
     const course = await getCloudCourse(client);
@@ -1022,6 +1235,16 @@ async function loadPlannerFromCloud() {
       renderAuthPanel();
       return;
     }
+
+    if (
+      hasCloudLoadConflictRisk() &&
+      !window.confirm("Loading cloud planner data will replace local planner data. Continue?")
+    ) {
+      setAuthStatus("Cloud load canceled. Use Sync now to save local changes first.");
+      return;
+    }
+
+    setAuthStatus("Loading cloud planner...");
 
     const courseId = course.id;
     const [
@@ -1139,8 +1362,8 @@ async function loadPlannerFromCloud() {
       questionIndex: 0,
     });
 
-    saveState();
-    renderAll();
+    markCloudSyncBaseline(course);
+    renderAll({ autosave: false });
     document.querySelector("#uploadStatus").textContent =
       "Loaded cloud planner metadata. Re-upload source files to restore local text search until server parsing is connected.";
     setAuthStatus(`Loaded ${state.materials.length} materials and ${state.deadlines.length} deadlines from cloud.`);
@@ -2908,7 +3131,7 @@ function renderAuthPanel() {
     signedOut.hidden = false;
     signedIn.hidden = true;
     document.querySelector("#authStatus").textContent =
-      authStatusMessage || "Add Supabase config to enable accounts.";
+      authStatusMessage || "Add Supabase config to enable accounts and autosave.";
     return;
   }
 
@@ -2916,16 +3139,16 @@ function renderAuthPanel() {
     signedOut.hidden = true;
     signedIn.hidden = false;
     userEmail.textContent = authSession.user.email;
-    document.querySelector("#authStatus").textContent = authStatusMessage || "Account connected.";
+    document.querySelector("#authStatus").textContent = authStatusMessage || "Account connected. Autosave ready.";
     return;
   }
 
   signedOut.hidden = false;
   signedIn.hidden = true;
-  document.querySelector("#authStatus").textContent = authStatusMessage || "Sign in to sync planner data.";
+  document.querySelector("#authStatus").textContent = authStatusMessage || "Sign in to sync and autosave planner data.";
 }
 
-function renderAll() {
+function renderAll({ autosave = true } = {}) {
   renderAuthPanel();
   renderCourse();
   renderMaterials();
@@ -2941,6 +3164,10 @@ function renderAll() {
   renderMetrics();
   syncFocusTicker();
   saveState();
+
+  if (autosave) {
+    queueCloudAutosave("planner update");
+  }
 }
 
 async function handleAuthAction(mode) {
@@ -2973,6 +3200,8 @@ async function handleAuthAction(mode) {
 
   clearAuthStatus();
   await refreshAuthSession();
+  resetCloudSyncTracking();
+  markCloudSyncBaseline();
   renderAuthPanel();
 }
 
@@ -4016,15 +4245,31 @@ document.querySelector("#signOut").addEventListener("click", async () => {
 
   authSession = null;
   clearAuthStatus();
+  resetCloudSyncTracking();
   renderAuthPanel();
 });
 
 document.querySelector("#answerQuestion").addEventListener("click", answerStudyQuestion);
 
-refreshAuthSession().then(renderAuthPanel);
-getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
-  authSession = session;
-  clearAuthStatus();
+refreshAuthSession().then(() => {
+  markCloudSyncBaseline();
   renderAuthPanel();
 });
-renderAll();
+getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
+  const previousUserId = authSession?.user?.id || "";
+  authSession = session;
+  clearAuthStatus();
+
+  if (session?.user?.id) {
+    if (session.user.id !== previousUserId) {
+      resetCloudSyncTracking();
+    }
+
+    markCloudSyncBaseline();
+  } else {
+    resetCloudSyncTracking();
+  }
+
+  renderAuthPanel();
+});
+renderAll({ autosave: false });
