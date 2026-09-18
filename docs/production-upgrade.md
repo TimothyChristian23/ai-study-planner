@@ -20,6 +20,7 @@ This document tracks the path from the deployed static prototype to a production
 - `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and OpenAI Responses
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
 - Manual sync/load controls for signed-in users to persist course setup, material metadata, deadlines, schedules, progress, quiz attempts, and answer history
+- Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 
 ## Setup Steps
 
@@ -55,11 +56,11 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Upload source files to the `course-materials` bucket.
-2. Add a parsing/indexing function that extracts text, chunks it, embeds it, and writes `material_chunks`.
-3. Route the `Ask materials` panel through `ask-materials`.
-4. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
-5. Move quiz generation from local heuristics to retrieved material chunks.
+1. Add a parsing/indexing function that extracts text from stored files, chunks it, embeds it, and writes `material_chunks`.
+2. Route the `Ask materials` panel through `ask-materials`.
+3. Replace manual cloud sync with autosave, conflict handling, and per-course selection.
+4. Move quiz generation from local heuristics to retrieved material chunks.
+5. Add signed download/reprocess tools for stored course files.
 
 ## Security Notes
 

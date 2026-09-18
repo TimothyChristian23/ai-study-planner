@@ -24,7 +24,10 @@ This document captures the local data shape used by the static prototype and the
       text: "extracted text capped for the browser prototype",
       pageCount: 18,
       indexedPages: 18,
-      topics: ["Graph traversal"]
+      topics: ["Graph traversal"],
+      storageBucket: "course-materials",
+      storagePath: "user-id/default-course/uuid/Lecture-7-Graph-Traversal.pdf",
+      cloudStatus: "Cloud file saved"
     }
   ],
   deadlines: [
@@ -152,6 +155,7 @@ This document captures the local data shape used by the static prototype and the
 - `file_type`
 - `storage_path`
 - `status`
+- `size_bytes`
 - `page_count`
 - `indexed_pages`
 - `created_at`
@@ -271,9 +275,10 @@ This document captures the local data shape used by the static prototype and the
 - Course availability stores preferred study days as JavaScript day numbers, where `0` is Sunday and `6` is Saturday.
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
 - Suggested deadlines are extracted locally from uploaded material text and kept separate until the student accepts them.
-- Material search uses local indexed text and file metadata only; no source content leaves the browser.
+- Material search uses local indexed text and file metadata until server-side parsing lands; signed-in uploads send raw files to private Supabase Storage.
 - Manual cloud sync uses `client_id` columns so the static frontend can update the same Supabase rows instead of creating duplicates.
-- Cloud loading restores planner metadata and history, but uploaded source text remains local until server-side parsing and storage are connected.
+- Signed-in uploads store raw files in the private `course-materials` bucket and save `storage_path` on material records.
+- Cloud loading restores planner metadata and history, but searchable source text remains local until server-side parsing and indexing are connected.
 - Activity trends are derived from `completedSessions` and `quizHistory`; they are not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

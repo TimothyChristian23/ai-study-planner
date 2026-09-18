@@ -6,6 +6,7 @@ const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
 const DEFAULT_CLOUD_COURSE_CLIENT_ID = "default-course";
+const MATERIAL_STORAGE_BUCKET = "course-materials";
 
 let pdfjsLoadingPromise;
 let quizAnswerVisible = false;
@@ -187,6 +188,11 @@ function normalizeState(rawState = {}) {
     text: material.text || "",
     pageCount: Number(material.pageCount) || 0,
     indexedPages: Number(material.indexedPages) || 0,
+    storageBucket: material.storageBucket || MATERIAL_STORAGE_BUCKET,
+    storagePath: material.storagePath || "",
+    cloudStatus: material.cloudStatus || (material.storagePath ? "Cloud file saved" : "Local only"),
+    cloudUploadedAt: material.cloudUploadedAt || null,
+    cloudError: material.cloudError || "",
   }));
   merged.deadlines = (merged.deadlines || []).map((deadline) => ({
     ...deadline,
@@ -366,6 +372,93 @@ function getCloudErrorMessage(error) {
   return error?.message ? `Cloud sync error: ${error.message}` : "Cloud sync failed. Try again after setup is complete.";
 }
 
+function canUseCloudStorage() {
+  return Boolean(getSupabaseClient() && authSession?.user?.id);
+}
+
+function sanitizeStorageSegment(value) {
+  return String(value || "file")
+    .normalize("NFKD")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "file";
+}
+
+function getMaterialStoragePath(material, file) {
+  const userId = authSession?.user?.id || "local-user";
+  const fileName = sanitizeStorageSegment(file?.name || material.name || "material");
+
+  return `${userId}/${DEFAULT_CLOUD_COURSE_CLIENT_ID}/${material.id}/${fileName}`;
+}
+
+async function uploadMaterialFileToCloud(file, material) {
+  const client = getSupabaseClient();
+
+  if (!client || !authSession?.user?.id) {
+    return {
+      ...material,
+      storageBucket: MATERIAL_STORAGE_BUCKET,
+      storagePath: "",
+      cloudStatus: "Local only",
+    };
+  }
+
+  const storagePath = getMaterialStoragePath(material, file);
+  const { data, error } = await client.storage.from(MATERIAL_STORAGE_BUCKET).upload(storagePath, file, {
+    cacheControl: "3600",
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
+
+  if (error) {
+    console.warn("Supabase Storage upload failed", error);
+
+    return {
+      ...material,
+      storageBucket: MATERIAL_STORAGE_BUCKET,
+      storagePath: "",
+      cloudStatus: "Cloud upload failed",
+      cloudError: error.message || "Storage upload failed",
+    };
+  }
+
+  return {
+    ...material,
+    storageBucket: MATERIAL_STORAGE_BUCKET,
+    storagePath: data?.path || storagePath,
+    cloudStatus: "Cloud file saved",
+    cloudError: "",
+    cloudUploadedAt: new Date().toISOString(),
+  };
+}
+
+async function removeMaterialFileFromCloud(material) {
+  const client = getSupabaseClient();
+
+  if (!client || !authSession?.user?.id || !material?.storagePath) {
+    return "skipped";
+  }
+
+  const { error } = await client.storage
+    .from(material.storageBucket || MATERIAL_STORAGE_BUCKET)
+    .remove([material.storagePath]);
+
+  if (error) {
+    console.warn("Supabase Storage delete failed", error);
+    return "failed";
+  }
+
+  return "removed";
+}
+
+function getMaterialStorageLabel(material) {
+  if (material.storagePath) {
+    return "Cloud file saved";
+  }
+
+  return material.cloudStatus || "Local only";
+}
+
 function toDateInputValue(value) {
   if (!value) {
     return "";
@@ -526,6 +619,7 @@ function materialCloudRows(courseId, userId) {
     client_id: material.id,
     file_name: material.name,
     file_type: material.type || "Material",
+    storage_path: material.storagePath || null,
     status: material.status || "Saved",
     size_bytes: Number(material.size) || 0,
     page_count: Number(material.pageCount) || 0,
@@ -645,7 +739,7 @@ async function syncPlannerToCloud() {
   const client = getAuthenticatedSupabaseClient();
 
   if (!client) {
-    return;
+    return false;
   }
 
   setAuthStatus("Syncing planner to cloud...");
@@ -685,9 +779,11 @@ async function syncPlannerToCloud() {
     setAuthStatus(
       `Synced ${state.materials.length} materials, ${state.deadlines.length} deadlines, and ${state.schedule.length} sessions.`,
     );
+    return true;
   } catch (error) {
     console.error(error);
     setAuthStatus(getCloudErrorMessage(error));
+    return false;
   } finally {
     renderAuthPanel();
   }
@@ -832,6 +928,9 @@ async function loadPlannerFromCloud() {
         pageCount: Number(material.page_count) || 0,
         indexedPages: Number(material.indexed_pages) || 0,
         topics: material.topics?.length ? material.topics : ["General review"],
+        storageBucket: MATERIAL_STORAGE_BUCKET,
+        storagePath: material.storage_path || "",
+        cloudStatus: material.storage_path ? "Cloud file saved" : "Local only",
       })),
       deadlines: deadlines.map((deadline) => ({
         id: deadline.client_id || deadline.id,
@@ -1765,6 +1864,12 @@ async function materialFromFile(file) {
   };
 }
 
+async function materialFromFileWithStorage(file) {
+  const material = await materialFromFile(file);
+
+  return uploadMaterialFileToCloud(file, material);
+}
+
 function buildSchedule() {
   const minutes = Number(state.course.dailyMinutes) || 45;
   const topics = getTopicStats();
@@ -2187,20 +2292,23 @@ function renderMaterials() {
   renderMaterialSearch();
 
   list.innerHTML = state.materials
-    .map(
-      (item) => `
+    .map((item) => {
+      const storageLabel = getMaterialStorageLabel(item);
+
+      return `
         <li>
           <div>
             <strong>${escapeHTML(item.name)}</strong>
             <span>${escapeHTML(item.type)} - ${formatBytes(item.size)} - ${escapeHTML(item.topics.join(", "))}</span>
+            <span class="storage-meta">${escapeHTML(storageLabel)}</span>
           </div>
           <div class="file-actions">
             <em>${escapeHTML(item.status)}</em>
             <button type="button" data-remove-id="${escapeHTML(item.id)}" aria-label="Remove ${escapeHTML(item.name)}">Remove</button>
           </div>
         </li>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
@@ -2703,19 +2811,40 @@ async function addFiles(files) {
   }
 
   const uploadStatus = document.querySelector("#uploadStatus");
+  const shouldUploadToCloud = canUseCloudStorage();
 
   try {
-    uploadStatus.textContent = `Indexing ${incoming.length} file${incoming.length === 1 ? "" : "s"}...`;
-    const newMaterials = await Promise.all(incoming.map(materialFromFile));
+    uploadStatus.textContent = shouldUploadToCloud
+      ? `Indexing and uploading ${incoming.length} file${incoming.length === 1 ? "" : "s"}...`
+      : `Indexing ${incoming.length} file${incoming.length === 1 ? "" : "s"}...`;
+    const newMaterials = await Promise.all(incoming.map(materialFromFileWithStorage));
     const newSuggestions = newMaterials.flatMap(extractDeadlineSuggestions);
+    const cloudSavedCount = newMaterials.filter((material) => material.storagePath).length;
+    const cloudFailedCount = newMaterials.filter((material) => material.cloudStatus === "Cloud upload failed").length;
     state.materials = [...newMaterials, ...state.materials];
     state.suggestedDeadlines = [...newSuggestions, ...state.suggestedDeadlines];
     uploadStatus.textContent =
       `Added ${newMaterials.length} material${newMaterials.length === 1 ? "" : "s"}.` +
+      (cloudSavedCount
+        ? ` Uploaded ${cloudSavedCount} file${cloudSavedCount === 1 ? "" : "s"} to cloud storage.`
+        : shouldUploadToCloud
+          ? " Cloud storage upload is pending setup."
+          : "") +
+      (cloudFailedCount
+        ? ` ${cloudFailedCount} cloud upload${cloudFailedCount === 1 ? "" : "s"} failed; local indexing was kept.`
+        : "") +
       (newSuggestions.length
         ? ` Found ${newSuggestions.length} deadline suggestion${newSuggestions.length === 1 ? "" : "s"}.`
         : "");
     renderAll();
+
+    if (cloudSavedCount) {
+      const synced = await syncPlannerToCloud();
+
+      if (synced) {
+        uploadStatus.textContent += " Cloud metadata synced.";
+      }
+    }
   } catch (error) {
     console.error(error);
     uploadStatus.textContent = "One or more files could not be processed. Try a smaller PDF or a text export.";
@@ -3391,18 +3520,39 @@ document.querySelector("#dropZone").addEventListener("keydown", (event) => {
   }
 });
 
-document.querySelector("#fileList").addEventListener("click", (event) => {
+document.querySelector("#fileList").addEventListener("click", async (event) => {
   const removeButton = event.target.closest("[data-remove-id]");
 
   if (!removeButton) {
     return;
   }
 
-  state.materials = state.materials.filter((material) => material.id !== removeButton.dataset.removeId);
+  const material = state.materials.find((item) => item.id === removeButton.dataset.removeId);
+  const uploadStatus = document.querySelector("#uploadStatus");
+
+  if (material?.storagePath && canUseCloudStorage()) {
+    uploadStatus.textContent = "Removing cloud file...";
+  }
+
+  const storageResult = await removeMaterialFileFromCloud(material);
+
+  state.materials = state.materials.filter((item) => item.id !== removeButton.dataset.removeId);
   state.suggestedDeadlines = state.suggestedDeadlines.filter(
     (suggestion) => suggestion.sourceMaterialId !== removeButton.dataset.removeId,
   );
   renderAll();
+
+  if (canUseCloudStorage()) {
+    await syncPlannerToCloud();
+  }
+
+  if (storageResult === "removed") {
+    uploadStatus.textContent = "Removed material and cloud file.";
+  } else if (storageResult === "failed") {
+    uploadStatus.textContent = "Removed local material, but the cloud file could not be deleted.";
+  } else if (canUseCloudStorage()) {
+    uploadStatus.textContent = "Removed material and synced cloud metadata.";
+  }
 });
 
 document.querySelector("#materialSearch").addEventListener("input", (event) => {

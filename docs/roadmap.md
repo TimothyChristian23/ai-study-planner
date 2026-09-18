@@ -40,6 +40,7 @@
 - [x] Add authentication UI
 - [x] Connect authenticated sessions to persisted planner records
 - [x] Store courses, deadlines, assignments, and study sessions
+- [x] Upload source files to private Supabase Storage
 - [ ] Parse uploaded PDFs and text files server-side
 - [x] Persist generated schedules from deadlines and available study time
 - [ ] Replace manual sync/load with autosave and conflict handling
