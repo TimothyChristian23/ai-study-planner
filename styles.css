@@ -167,7 +167,8 @@ h4 {
   display: none;
 }
 
-.auth-panel input {
+.auth-panel input,
+.auth-panel select {
   width: 100%;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -179,6 +180,22 @@ h4 {
 
 .auth-panel input::placeholder {
   color: #9fb0c6;
+}
+
+.cloud-course-picker {
+  display: grid;
+  gap: 6px;
+  color: #b8c4d5;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.cloud-course-picker span {
+  display: block;
+}
+
+.auth-panel select {
+  color-scheme: dark;
 }
 
 .auth-actions,

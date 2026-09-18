@@ -39,10 +39,15 @@
           </div>
           <div class="auth-signed-in" id="authSignedIn" hidden>
             <strong id="authUserEmail">Signed in</strong>
+            <label class="cloud-course-picker" for="cloudCourseSelect">
+              <span>Cloud course</span>
+              <select id="cloudCourseSelect" aria-label="Cloud course"></select>
+            </label>
             <div class="cloud-actions">
               <button class="secondary-button" type="button" id="syncCloud">Sync now</button>
               <button class="secondary-button" type="button" id="loadCloud">Load cloud</button>
             </div>
+            <button class="secondary-button quiet-button" type="button" id="createCloudCourse">New cloud course</button>
             <button class="secondary-button quiet-button" type="button" id="signOut">Sign out</button>
           </div>
           <p class="auth-status" id="authStatus" aria-live="polite"></p>

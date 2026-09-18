@@ -19,6 +19,7 @@ This document tracks the path from the deployed static prototype to a production
 - `supabase/migrations/0002_static_client_sync.sql` for stable client IDs used by the static frontend sync path
 - `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and OpenAI Responses
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
+- Cloud course picker for selecting existing planner records or creating a new cloud course from the current local planner
 - Debounced cloud autosave for signed-in users, with manual sync/load safety controls and a remote-change guard before autosave overwrites existing cloud data
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
@@ -59,7 +60,7 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add per-course selection and richer conflict resolution for users with multiple cloud planners.
+1. Add richer conflict resolution for users switching between changed cloud planners.
 2. Move quiz generation from local heuristics to retrieved material chunks.
 3. Add signed download/reprocess tools for stored course files.
 4. Add background retries and index status fields for longer documents.

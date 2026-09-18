@@ -6,6 +6,7 @@ const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSIO
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
 const DEFAULT_CLOUD_COURSE_CLIENT_ID = "default-course";
+const CLOUD_COURSE_SELECTION_KEY = "ai-study-planner-selected-cloud-course-v1";
 const MATERIAL_STORAGE_BUCKET = "course-materials";
 const CLOUD_AUTOSAVE_DELAY_MS = 1400;
 
@@ -22,6 +23,9 @@ let cloudAutosaveBlocked = false;
 let lastCloudSyncSignature = "";
 let lastCloudSeenCourseUpdatedAt = "";
 let cloudSyncBaselineConfirmed = false;
+let activeCloudCourseClientId = loadStoredCloudCourseClientId();
+let cloudCourses = [];
+let cloudCoursesLoading = false;
 
 const stopWords = new Set([
   "about",
@@ -306,6 +310,40 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function getCloudCourseSelectionStorageKey() {
+  return authSession?.user?.id
+    ? `${CLOUD_COURSE_SELECTION_KEY}:${authSession.user.id}`
+    : CLOUD_COURSE_SELECTION_KEY;
+}
+
+function loadStoredCloudCourseClientId() {
+  if (authSession?.user?.id) {
+    return localStorage.getItem(getCloudCourseSelectionStorageKey()) || DEFAULT_CLOUD_COURSE_CLIENT_ID;
+  }
+
+  return localStorage.getItem(CLOUD_COURSE_SELECTION_KEY) || DEFAULT_CLOUD_COURSE_CLIENT_ID;
+}
+
+function setActiveCloudCourseClientId(clientId) {
+  activeCloudCourseClientId = clientId || DEFAULT_CLOUD_COURSE_CLIENT_ID;
+  localStorage.setItem(CLOUD_COURSE_SELECTION_KEY, activeCloudCourseClientId);
+  localStorage.setItem(getCloudCourseSelectionStorageKey(), activeCloudCourseClientId);
+}
+
+function getActiveCloudCourseClientId() {
+  return activeCloudCourseClientId || DEFAULT_CLOUD_COURSE_CLIENT_ID;
+}
+
+function createCloudCourseClientId(courseName = state.course.name) {
+  const slug = String(courseName || "course")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 42);
+
+  return `${slug || "course"}-${Date.now()}`;
+}
+
 function sortById(items) {
   return [...items].sort((a, b) => String(a.id || "").localeCompare(String(b.id || "")));
 }
@@ -407,7 +445,19 @@ function clearCloudAutosaveTimer() {
   }
 }
 
+function rememberCloudCourse(course) {
+  if (!course?.client_id) {
+    return;
+  }
+
+  cloudCourses = [
+    course,
+    ...cloudCourses.filter((item) => item.client_id !== course.client_id),
+  ].sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+}
+
 function markCloudSyncBaseline(course = null) {
+  rememberCloudCourse(course);
   lastCloudSyncSignature = getCloudSyncSignature();
   lastCloudSeenCourseUpdatedAt = course?.updated_at || lastCloudSeenCourseUpdatedAt || "";
   cloudSyncBaselineConfirmed = cloudSyncBaselineConfirmed || Boolean(course?.updated_at);
@@ -492,6 +542,141 @@ function getAuthenticatedSupabaseClient() {
   }
 
   return client;
+}
+
+async function refreshCloudCourses() {
+  const client = getSupabaseClient();
+
+  if (!client || !authSession?.user?.id) {
+    cloudCourses = [];
+    cloudCoursesLoading = false;
+    return [];
+  }
+
+  cloudCoursesLoading = true;
+  renderAuthPanel();
+
+  try {
+    const { data, error } = await client
+      .from("courses")
+      .select("id, client_id, name, term, exam_date, created_at, updated_at")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    cloudCourses = data || [];
+
+    if (cloudCourses.length && !cloudCourses.some((course) => course.client_id === getActiveCloudCourseClientId())) {
+      setActiveCloudCourseClientId(cloudCourses[0].client_id);
+      resetCloudSyncTracking();
+      markCloudSyncBaseline();
+      setAuthStatus("Selected your most recent cloud course. Load cloud before editing, or Sync now to overwrite it.");
+    }
+
+    return cloudCourses;
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(getCloudErrorMessage(error));
+    return [];
+  } finally {
+    cloudCoursesLoading = false;
+    renderAuthPanel();
+  }
+}
+
+function getCloudCourseOptionLabel(course) {
+  const name = course?.name || state.course.name || "Current planner";
+  const examDate = toDateInputValue(course?.exam_date);
+
+  return examDate ? `${name} (${examDate})` : name;
+}
+
+function renderCloudCourseSelect() {
+  const courseSelect = document.querySelector("#cloudCourseSelect");
+
+  if (!courseSelect) {
+    return;
+  }
+
+  const activeClientId = getActiveCloudCourseClientId();
+  const options = [];
+  const activeCourse = cloudCourses.find((course) => course.client_id === activeClientId);
+
+  if (!activeCourse) {
+    options.push({
+      value: activeClientId,
+      label: `${state.course.name || "Current planner"} (new)`,
+    });
+  }
+
+  cloudCourses.forEach((course) => {
+    options.push({
+      value: course.client_id,
+      label: getCloudCourseOptionLabel(course),
+    });
+  });
+
+  courseSelect.replaceChildren(
+    ...options.map((option) => {
+      const element = document.createElement("option");
+      element.value = option.value;
+      element.textContent = option.label;
+      return element;
+    }),
+  );
+  courseSelect.value = activeClientId;
+}
+
+async function handleCloudCourseSelection(clientId) {
+  if (!clientId || clientId === getActiveCloudCourseClientId()) {
+    renderAuthPanel();
+    return;
+  }
+
+  if (
+    hasCloudLoadConflictRisk() &&
+    !window.confirm("Switching cloud courses can leave unsynced local changes behind. Continue?")
+  ) {
+    renderAuthPanel();
+    return;
+  }
+
+  setActiveCloudCourseClientId(clientId);
+  resetCloudSyncTracking();
+  markCloudSyncBaseline();
+  renderAuthPanel();
+
+  const selectedCourse = cloudCourses.find((course) => course.client_id === clientId);
+  setAuthStatus(`Selected ${getCloudCourseOptionLabel(selectedCourse)}. Load cloud or Sync now.`);
+}
+
+async function createCloudCourseFromCurrentPlanner() {
+  const client = getAuthenticatedSupabaseClient();
+
+  if (!client) {
+    return;
+  }
+
+  const previousCourseClientId = getActiveCloudCourseClientId();
+  const nextCourseClientId = createCloudCourseClientId();
+
+  setActiveCloudCourseClientId(nextCourseClientId);
+  resetCloudSyncTracking();
+  setAuthStatus("Creating cloud course...");
+
+  const synced = await syncPlannerToCloud();
+
+  if (!synced) {
+    setActiveCloudCourseClientId(previousCourseClientId);
+    resetCloudSyncTracking();
+    renderAuthPanel();
+    return;
+  }
+
+  await refreshCloudCourses();
+  setAuthStatus(`Created ${state.course.name || "cloud course"} and synced planner data.`);
 }
 
 function canAutosaveToCloud() {
@@ -589,7 +774,7 @@ function getMaterialStoragePath(material, file) {
   const userId = authSession?.user?.id || "local-user";
   const fileName = sanitizeStorageSegment(file?.name || material.name || "material");
 
-  return `${userId}/${DEFAULT_CLOUD_COURSE_CLIENT_ID}/${material.id}/${fileName}`;
+  return `${userId}/${getActiveCloudCourseClientId()}/${material.id}/${fileName}`;
 }
 
 async function uploadMaterialFileToCloud(file, material) {
@@ -685,7 +870,7 @@ function toScheduledAt(session) {
 function cloudCoursePayload(userId) {
   return {
     user_id: userId,
-    client_id: DEFAULT_CLOUD_COURSE_CLIENT_ID,
+    client_id: getActiveCloudCourseClientId(),
     name: state.course.name || "Course",
     term: "Fall semester",
     exam_date: state.course.examDate || null,
@@ -701,7 +886,7 @@ async function getCloudCourse(client, { create = false } = {}) {
   const { data: existingCourse, error: existingError } = await client
     .from("courses")
     .select("*")
-    .eq("client_id", DEFAULT_CLOUD_COURSE_CLIENT_ID)
+    .eq("client_id", getActiveCloudCourseClientId())
     .maybeSingle();
 
   if (existingError) {
@@ -949,6 +1134,10 @@ async function syncPlannerToCloud(options = {}) {
     cloudAutosaveBlocked = false;
   }
 
+  if (source === "autosave" && (await shouldPauseCloudAutosaveForConflict(client))) {
+    return false;
+  }
+
   setAuthStatus(source === "autosave" ? "Autosaving planner to cloud..." : "Syncing planner to cloud...");
 
   try {
@@ -1014,7 +1203,7 @@ async function indexMaterialInCloud(material) {
   const uploadStatus = document.querySelector("#uploadStatus");
   uploadStatus.textContent = `Preparing ${material.name} for indexing...`;
 
-  const synced = await syncPlannerToCloud();
+  const synced = await syncPlannerToCloud({ source: "autosave" });
 
   if (!synced) {
     uploadStatus.textContent = "Could not sync material metadata before indexing.";
@@ -1026,7 +1215,7 @@ async function indexMaterialInCloud(material) {
   try {
     const { data, error } = await client.functions.invoke("index-material", {
       body: {
-        courseClientId: DEFAULT_CLOUD_COURSE_CLIENT_ID,
+        courseClientId: getActiveCloudCourseClientId(),
         materialClientId: material.id,
       },
     });
@@ -1089,7 +1278,7 @@ async function answerFromCloudMaterials(question) {
   }
 
   setAuthStatus("Searching indexed cloud materials...");
-  const synced = await syncPlannerToCloud();
+  const synced = await syncPlannerToCloud({ source: "autosave" });
 
   if (!synced) {
     throw new Error("Could not sync planner metadata before cloud Q&A.");
@@ -3120,12 +3309,17 @@ function renderAuthPanel() {
   const signUp = document.querySelector("#signUp");
   const syncCloud = document.querySelector("#syncCloud");
   const loadCloud = document.querySelector("#loadCloud");
+  const courseSelect = document.querySelector("#cloudCourseSelect");
+  const createCloudCourse = document.querySelector("#createCloudCourse");
   const hasConfig = hasSupabaseConfig() && Boolean(window.supabase?.createClient);
+  const signedInUser = Boolean(authSession?.user);
 
   signIn.disabled = !hasConfig;
   signUp.disabled = !hasConfig;
-  syncCloud.disabled = !hasConfig || !authSession?.user;
-  loadCloud.disabled = !hasConfig || !authSession?.user;
+  syncCloud.disabled = !hasConfig || !signedInUser || cloudCoursesLoading;
+  loadCloud.disabled = !hasConfig || !signedInUser || cloudCoursesLoading;
+  courseSelect.disabled = !hasConfig || !signedInUser || cloudCoursesLoading;
+  createCloudCourse.disabled = !hasConfig || !signedInUser || cloudCoursesLoading;
 
   if (!hasConfig) {
     signedOut.hidden = false;
@@ -3139,7 +3333,9 @@ function renderAuthPanel() {
     signedOut.hidden = true;
     signedIn.hidden = false;
     userEmail.textContent = authSession.user.email;
-    document.querySelector("#authStatus").textContent = authStatusMessage || "Account connected. Autosave ready.";
+    renderCloudCourseSelect();
+    document.querySelector("#authStatus").textContent =
+      authStatusMessage || (cloudCoursesLoading ? "Loading cloud courses..." : "Account connected. Autosave ready.");
     return;
   }
 
@@ -3241,7 +3437,7 @@ async function addFiles(files) {
     renderAll();
 
     if (cloudSavedCount) {
-      const synced = await syncPlannerToCloud();
+      const synced = await syncPlannerToCloud({ source: "autosave" });
 
       if (synced) {
         uploadStatus.textContent += " Cloud metadata synced.";
@@ -3956,7 +4152,7 @@ document.querySelector("#fileList").addEventListener("click", async (event) => {
   renderAll();
 
   if (canUseCloudStorage()) {
-    await syncPlannerToCloud();
+    await syncPlannerToCloud({ source: "autosave" });
   }
 
   if (storageResult === "removed") {
@@ -4228,6 +4424,10 @@ document.querySelector("#signUp").addEventListener("click", () => {
 
 document.querySelector("#syncCloud").addEventListener("click", syncPlannerToCloud);
 document.querySelector("#loadCloud").addEventListener("click", loadPlannerFromCloud);
+document.querySelector("#cloudCourseSelect").addEventListener("change", (event) => {
+  handleCloudCourseSelection(event.target.value);
+});
+document.querySelector("#createCloudCourse").addEventListener("click", createCloudCourseFromCurrentPlanner);
 
 document.querySelector("#signOut").addEventListener("click", async () => {
   const client = getSupabaseClient();
@@ -4244,6 +4444,7 @@ document.querySelector("#signOut").addEventListener("click", async () => {
   }
 
   authSession = null;
+  cloudCourses = [];
   clearAuthStatus();
   resetCloudSyncTracking();
   renderAuthPanel();
@@ -4251,11 +4452,13 @@ document.querySelector("#signOut").addEventListener("click", async () => {
 
 document.querySelector("#answerQuestion").addEventListener("click", answerStudyQuestion);
 
-refreshAuthSession().then(() => {
+refreshAuthSession().then(async () => {
+  setActiveCloudCourseClientId(loadStoredCloudCourseClientId());
   markCloudSyncBaseline();
+  await refreshCloudCourses();
   renderAuthPanel();
 });
-getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
+getSupabaseClient()?.auth.onAuthStateChange(async (_event, session) => {
   const previousUserId = authSession?.user?.id || "";
   authSession = session;
   clearAuthStatus();
@@ -4263,10 +4466,13 @@ getSupabaseClient()?.auth.onAuthStateChange((_event, session) => {
   if (session?.user?.id) {
     if (session.user.id !== previousUserId) {
       resetCloudSyncTracking();
+      setActiveCloudCourseClientId(loadStoredCloudCourseClientId());
     }
 
     markCloudSyncBaseline();
+    await refreshCloudCourses();
   } else {
+    cloudCourses = [];
     resetCloudSyncTracking();
   }
 
