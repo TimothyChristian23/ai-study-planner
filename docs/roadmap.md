@@ -46,6 +46,7 @@
 - [x] Replace manual sync/load with autosave and conflict handling
 - [x] Add per-course selection for multiple cloud planners
 - [x] Add cloud conflict resolution actions
+- [x] Add signed download and reprocess controls for stored files
 
 ## Phase 3: AI Study Engine
 

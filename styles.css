@@ -669,6 +669,11 @@ textarea {
   color: var(--teal);
 }
 
+.file-actions .download-material-button {
+  background: #edf3ff;
+  color: var(--blue);
+}
+
 .deadline-list {
   display: grid;
   gap: 10px;

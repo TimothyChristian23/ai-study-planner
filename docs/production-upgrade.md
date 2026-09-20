@@ -23,6 +23,7 @@ This document tracks the path from the deployed static prototype to a production
 - Debounced cloud autosave for signed-in users, with manual sync/load safety controls and a remote-change guard before autosave overwrites existing cloud data
 - Account-panel conflict resolution actions for loading the cloud copy, keeping local changes, or explicitly overwriting cloud
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
+- Signed download and reprocess controls for cloud-stored course files
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
@@ -63,9 +64,8 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add signed download/reprocess tools for stored course files.
-2. Add background retries and index status fields for longer documents.
-3. Add saved cloud answer hydration so server-created answers appear after load without duplication.
+1. Add background retries and index status fields for longer documents.
+2. Add saved cloud answer hydration so server-created answers appear after load without duplication.
 
 ## Security Notes
 

@@ -920,6 +920,39 @@ async function removeMaterialFileFromCloud(material) {
   return "removed";
 }
 
+async function downloadMaterialFromCloud(material) {
+  const client = getSupabaseClient();
+  const uploadStatus = document.querySelector("#uploadStatus");
+
+  if (!client || !authSession?.user?.id || !material?.storagePath) {
+    uploadStatus.textContent = "Sign in and choose a cloud-stored material before downloading.";
+    return;
+  }
+
+  uploadStatus.textContent = `Creating secure download link for ${material.name}...`;
+
+  const { data, error } = await client.storage
+    .from(material.storageBucket || MATERIAL_STORAGE_BUCKET)
+    .createSignedUrl(material.storagePath, 120, {
+      download: material.name,
+    });
+
+  if (error || !data?.signedUrl) {
+    console.warn("Supabase Storage signed URL failed", error);
+    uploadStatus.textContent = "Could not create a secure download link for this material.";
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = data.signedUrl;
+  link.download = material.name;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  uploadStatus.textContent = `Download link created for ${material.name}.`;
+}
+
 function getMaterialStorageLabel(material) {
   if (material.storagePath) {
     return "Cloud file saved";
@@ -3071,6 +3104,8 @@ function renderMaterials() {
   list.innerHTML = state.materials
     .map((item) => {
       const storageLabel = getMaterialStorageLabel(item);
+      const canUseCloudFile = item.storagePath && canUseCloudStorage();
+      const indexLabel = /indexed/i.test(item.status || "") ? "Reprocess" : "Index";
 
       return `
         <li>
@@ -3082,8 +3117,11 @@ function renderMaterials() {
           <div class="file-actions">
             <em>${escapeHTML(item.status)}</em>
             ${
-              item.storagePath && canUseCloudStorage()
-                ? `<button class="index-material-button" type="button" data-index-id="${escapeHTML(item.id)}">Index</button>`
+              canUseCloudFile
+                ? `
+                  <button class="download-material-button" type="button" data-download-id="${escapeHTML(item.id)}">Download</button>
+                  <button class="index-material-button" type="button" data-index-id="${escapeHTML(item.id)}">${indexLabel}</button>
+                `
                 : ""
             }
             <button type="button" data-remove-id="${escapeHTML(item.id)}" aria-label="Remove ${escapeHTML(item.name)}">Remove</button>
@@ -4334,8 +4372,19 @@ document.querySelector("#dropZone").addEventListener("keydown", (event) => {
 });
 
 document.querySelector("#fileList").addEventListener("click", async (event) => {
+  const downloadButton = event.target.closest("[data-download-id]");
   const indexButton = event.target.closest("[data-index-id]");
   const removeButton = event.target.closest("[data-remove-id]");
+
+  if (downloadButton) {
+    const material = state.materials.find((item) => item.id === downloadButton.dataset.downloadId);
+
+    if (material) {
+      await downloadMaterialFromCloud(material);
+    }
+
+    return;
+  }
 
   if (indexButton) {
     const material = state.materials.find((item) => item.id === indexButton.dataset.indexId);
