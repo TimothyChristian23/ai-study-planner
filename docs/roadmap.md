@@ -47,6 +47,7 @@
 - [x] Add per-course selection for multiple cloud planners
 - [x] Add cloud conflict resolution actions
 - [x] Add signed download and reprocess controls for stored files
+- [x] Add cloud material indexing status and retry metadata
 
 ## Phase 3: AI Study Engine
 

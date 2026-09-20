@@ -8,6 +8,7 @@ const SUPABASE_CONFIG = window.AI_STUDY_PLANNER_CONFIG || {};
 const DEFAULT_CLOUD_COURSE_CLIENT_ID = "default-course";
 const CLOUD_COURSE_SELECTION_KEY = "ai-study-planner-selected-cloud-course-v1";
 const MATERIAL_STORAGE_BUCKET = "course-materials";
+const MATERIAL_INDEX_STATUSES = new Set(["not_started", "queued", "indexing", "indexed", "failed"]);
 const CLOUD_AUTOSAVE_DELAY_MS = 1400;
 
 let pdfjsLoadingPromise;
@@ -202,6 +203,12 @@ function normalizeState(rawState = {}) {
     text: material.text || "",
     pageCount: Number(material.pageCount) || 0,
     indexedPages: Number(material.indexedPages) || 0,
+    indexStatus: normalizeMaterialIndexStatus(material),
+    indexError: material.indexError || material.index_error || "",
+    indexAttempts: Number(material.indexAttempts ?? material.index_attempts) || 0,
+    chunkCount: getMaterialChunkCount(material),
+    indexStartedAt: material.indexStartedAt || material.index_started_at || null,
+    indexedAt: material.indexedAt || material.indexed_at || null,
     storageBucket: material.storageBucket || MATERIAL_STORAGE_BUCKET,
     storagePath: material.storagePath || "",
     cloudStatus: material.cloudStatus || (material.storagePath ? "Cloud file saved" : "Local only"),
@@ -297,6 +304,59 @@ function normalizeState(rawState = {}) {
   return merged;
 }
 
+function normalizeMaterialIndexStatus(material = {}) {
+  const explicitStatus = String(material.indexStatus || material.index_status || "").toLowerCase();
+
+  if (MATERIAL_INDEX_STATUSES.has(explicitStatus)) {
+    return explicitStatus;
+  }
+
+  const statusText = `${material.status || ""} ${material.cloudStatus || ""}`.toLowerCase();
+
+  if (/indexed\s+\d+\s+chunks?/.test(statusText) || statusText.includes("cloud indexed")) {
+    return "indexed";
+  }
+
+  if (statusText.includes("queued for indexing") || statusText.includes("indexing queued")) {
+    return "queued";
+  }
+
+  if (material.indexError || material.index_error || statusText.includes("indexing failed")) {
+    return "failed";
+  }
+
+  if (statusText.includes("indexing")) {
+    return "indexing";
+  }
+
+  return "not_started";
+}
+
+function getMaterialChunkCount(material = {}) {
+  const explicitCount = Number(material.chunkCount ?? material.chunk_count);
+
+  if (Number.isFinite(explicitCount) && explicitCount > 0) {
+    return explicitCount;
+  }
+
+  const match = String(material.status || material.cloudStatus || "").match(/Indexed\s+(\d+)\s+chunks?/i);
+
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function updateMaterialIndexState(materialId, patch) {
+  state.materials = state.materials.map((item) =>
+    item.id === materialId
+      ? {
+          ...item,
+          ...patch,
+          indexStatus: normalizeMaterialIndexStatus({ ...item, ...patch }),
+          chunkCount: getMaterialChunkCount({ ...item, ...patch }),
+        }
+      : item,
+  );
+}
+
 function loadState() {
   const stored = localStorage.getItem(STORAGE_KEY);
 
@@ -371,6 +431,12 @@ function getCloudSyncSnapshot() {
       size: Number(material.size) || 0,
       pageCount: Number(material.pageCount) || 0,
       indexedPages: Number(material.indexedPages) || 0,
+      indexStatus: normalizeMaterialIndexStatus(material),
+      indexError: material.indexError || "",
+      indexAttempts: Number(material.indexAttempts) || 0,
+      chunkCount: getMaterialChunkCount(material),
+      indexStartedAt: material.indexStartedAt || "",
+      indexedAt: material.indexedAt || "",
       storagePath: material.storagePath || "",
       topics: material.topics || [],
       uploadedAt: material.uploadedAt || "",
@@ -955,6 +1021,26 @@ async function downloadMaterialFromCloud(material) {
 
 function getMaterialStorageLabel(material) {
   if (material.storagePath) {
+    const indexStatus = normalizeMaterialIndexStatus(material);
+    const chunkCount = getMaterialChunkCount(material);
+
+    if (indexStatus === "indexed") {
+      return chunkCount ? `Cloud indexed: ${chunkCount} chunks` : "Cloud indexed";
+    }
+
+    if (indexStatus === "queued") {
+      return "Cloud indexing queued";
+    }
+
+    if (indexStatus === "indexing") {
+      return "Cloud indexing in progress";
+    }
+
+    if (indexStatus === "failed") {
+      const attempts = Number(material.indexAttempts) || 0;
+      return attempts > 1 ? `Cloud indexing failed after ${attempts} attempts` : "Cloud indexing failed";
+    }
+
     return "Cloud file saved";
   }
 
@@ -1126,6 +1212,12 @@ function materialCloudRows(courseId, userId) {
     size_bytes: Number(material.size) || 0,
     page_count: Number(material.pageCount) || 0,
     indexed_pages: Number(material.indexedPages) || 0,
+    index_status: normalizeMaterialIndexStatus(material),
+    index_error: material.indexError || null,
+    index_attempts: Number(material.indexAttempts) || 0,
+    chunk_count: getMaterialChunkCount(material),
+    index_started_at: material.indexStartedAt || null,
+    indexed_at: material.indexedAt || null,
     topics: material.topics?.length ? material.topics : ["General review"],
     created_at: material.uploadedAt || new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -1320,15 +1412,41 @@ async function indexMaterialInCloud(material) {
   }
 
   const uploadStatus = document.querySelector("#uploadStatus");
+  updateMaterialIndexState(material.id, {
+    status: "Queued for indexing",
+    cloudStatus: "Cloud indexing queued",
+    indexStatus: "queued",
+    indexError: "",
+    indexStartedAt: null,
+  });
+  saveState();
+  renderMaterials();
   uploadStatus.textContent = `Preparing ${material.name} for indexing...`;
 
   const synced = await syncPlannerToCloud({ source: "autosave" });
 
   if (!synced) {
+    updateMaterialIndexState(material.id, {
+      status: "Indexing failed",
+      cloudStatus: "Cloud indexing failed",
+      indexStatus: "failed",
+      indexError: "Could not sync material metadata before indexing.",
+    });
+    saveState();
+    renderMaterials();
     uploadStatus.textContent = "Could not sync material metadata before indexing.";
     return;
   }
 
+  updateMaterialIndexState(material.id, {
+    status: "Indexing...",
+    cloudStatus: "Cloud indexing in progress",
+    indexStatus: "indexing",
+    indexError: "",
+    indexStartedAt: new Date().toISOString(),
+  });
+  saveState();
+  renderMaterials();
   uploadStatus.textContent = `Indexing ${material.name}...`;
 
   try {
@@ -1344,24 +1462,35 @@ async function indexMaterialInCloud(material) {
     }
 
     const status = data?.status || `Indexed ${data?.chunkCount || 0} chunks`;
-    state.materials = state.materials.map((item) =>
-      item.id === material.id
-        ? {
-            ...item,
-            status,
-            cloudStatus: status,
-            pageCount: Number(data?.pageCount) || item.pageCount || 0,
-            indexedPages: Number(data?.pageCount) || item.indexedPages || 0,
-          }
-        : item,
-    );
-
-    saveState();
-    renderAll();
+    const currentMaterial = state.materials.find((item) => item.id === material.id) || material;
+    updateMaterialIndexState(material.id, {
+      status,
+      cloudStatus: status,
+      indexStatus: data?.indexStatus || "indexed",
+      indexError: "",
+      indexAttempts: Number(data?.indexAttempts) || Number(currentMaterial.indexAttempts) || 0,
+      chunkCount: Number(data?.chunkCount) || 0,
+      pageCount: Number(data?.pageCount) || currentMaterial.pageCount || 0,
+      indexedPages: Number(data?.indexedPages) || Number(data?.pageCount) || currentMaterial.indexedPages || 0,
+      indexStartedAt: data?.indexStartedAt || currentMaterial.indexStartedAt || null,
+      indexedAt: data?.indexedAt || new Date().toISOString(),
+    });
+    renderAll({ autosave: false });
+    markCloudSyncBaseline();
     uploadStatus.textContent = `${material.name} indexed into ${data?.chunkCount || 0} searchable chunks.`;
   } catch (error) {
     console.error(error);
-    setAuthStatus(error?.message || "Could not index this material.");
+    const message = error?.message || "Could not index this material.";
+    const currentMaterial = state.materials.find((item) => item.id === material.id) || material;
+    updateMaterialIndexState(material.id, {
+      status: "Indexing failed",
+      cloudStatus: "Cloud indexing failed",
+      indexStatus: "failed",
+      indexError: message,
+      indexAttempts: (Number(currentMaterial.indexAttempts) || 0) + 1,
+    });
+    renderAll();
+    setAuthStatus(message);
     uploadStatus.textContent = "Cloud indexing failed. Check Supabase function deployment and secrets.";
     renderAuthPanel();
   }
@@ -1701,10 +1830,16 @@ async function loadPlannerFromCloud(options = {}) {
         text: "",
         pageCount: Number(material.page_count) || 0,
         indexedPages: Number(material.indexed_pages) || 0,
+        indexStatus: material.index_status || "not_started",
+        indexError: material.index_error || "",
+        indexAttempts: Number(material.index_attempts) || 0,
+        chunkCount: Number(material.chunk_count) || 0,
+        indexStartedAt: material.index_started_at || null,
+        indexedAt: material.indexed_at || null,
         topics: material.topics?.length ? material.topics : ["General review"],
         storageBucket: MATERIAL_STORAGE_BUCKET,
         storagePath: material.storage_path || "",
-        cloudStatus: material.storage_path ? "Cloud file saved" : "Local only",
+        cloudStatus: material.status || (material.storage_path ? "Cloud file saved" : "Local only"),
       })),
       deadlines: deadlines.map((deadline) => ({
         id: deadline.client_id || deadline.id,
@@ -3105,14 +3240,18 @@ function renderMaterials() {
     .map((item) => {
       const storageLabel = getMaterialStorageLabel(item);
       const canUseCloudFile = item.storagePath && canUseCloudStorage();
-      const indexLabel = /indexed/i.test(item.status || "") ? "Reprocess" : "Index";
+      const indexStatus = normalizeMaterialIndexStatus(item);
+      const indexLabel = indexStatus === "indexed" ? "Reprocess" : indexStatus === "failed" ? "Retry" : "Index";
+      const isIndexing = indexStatus === "indexing";
+      const indexError = indexStatus === "failed" && item.indexError ? item.indexError : "";
 
       return `
         <li>
           <div>
             <strong>${escapeHTML(item.name)}</strong>
             <span>${escapeHTML(item.type)} - ${formatBytes(item.size)} - ${escapeHTML(item.topics.join(", "))}</span>
-            <span class="storage-meta">${escapeHTML(storageLabel)}</span>
+            <span class="storage-meta${indexStatus === "failed" ? " storage-meta-error" : ""}">${escapeHTML(storageLabel)}</span>
+            ${indexError ? `<span class="storage-meta storage-meta-error">${escapeHTML(indexError)}</span>` : ""}
           </div>
           <div class="file-actions">
             <em>${escapeHTML(item.status)}</em>
@@ -3120,7 +3259,7 @@ function renderMaterials() {
               canUseCloudFile
                 ? `
                   <button class="download-material-button" type="button" data-download-id="${escapeHTML(item.id)}">Download</button>
-                  <button class="index-material-button" type="button" data-index-id="${escapeHTML(item.id)}">${indexLabel}</button>
+                  <button class="index-material-button" type="button" data-index-id="${escapeHTML(item.id)}"${isIndexing ? " disabled" : ""}>${indexLabel}</button>
                 `
                 : ""
             }

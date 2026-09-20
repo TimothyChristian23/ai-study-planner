@@ -18,6 +18,7 @@ type MaterialRow = {
   storage_path: string | null;
   page_count: number;
   indexed_pages: number;
+  index_attempts: number;
   topics: string[] | null;
 };
 
@@ -176,6 +177,24 @@ async function createChunkRows(material: MaterialRow, chunks: Array<{ content: s
   return rows;
 }
 
+async function updateMaterialIndexState(
+  supabase: ReturnType<typeof createClient>,
+  materialId: string,
+  fields: Record<string, unknown>,
+) {
+  const { error } = await supabase
+    .from("materials")
+    .update({
+      ...fields,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", materialId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -184,6 +203,11 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
+
+  let supabase: ReturnType<typeof createClient> | null = null;
+  let material: MaterialRow | null = null;
+  let indexAttempt = 0;
+  let indexStartedAt = "";
 
   try {
     const authorization = request.headers.get("Authorization") || "";
@@ -201,7 +225,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "OPENAI_API_KEY is not configured." }, 500);
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL") || "", getSupabaseKey(), {
+    supabase = createClient(Deno.env.get("SUPABASE_URL") || "", getSupabaseKey(), {
       global: {
         headers: { Authorization: authorization },
       },
@@ -228,7 +252,7 @@ Deno.serve(async (request) => {
 
     let materialQuery = supabase
       .from("materials")
-      .select("id, course_id, file_name, file_type, storage_path, page_count, indexed_pages, topics")
+      .select("id, course_id, file_name, file_type, storage_path, page_count, indexed_pages, index_attempts, topics")
       .eq("course_id", resolvedCourseId);
 
     materialQuery = materialId ? materialQuery.eq("id", materialId) : materialQuery.eq("client_id", materialClientId);
@@ -239,14 +263,31 @@ Deno.serve(async (request) => {
       throw materialError;
     }
 
-    const material = materialData as MaterialRow | null;
+    material = materialData as MaterialRow | null;
 
     if (!material) {
       return jsonResponse({ error: "Material was not found. Sync the planner first." }, 404);
     }
 
+    indexAttempt = Number(material.index_attempts || 0) + 1;
+    indexStartedAt = new Date().toISOString();
+    await updateMaterialIndexState(supabase, material.id, {
+      status: "Indexing...",
+      index_status: "indexing",
+      index_error: null,
+      index_attempts: indexAttempt,
+      index_started_at: indexStartedAt,
+    });
+
     if (!material.storage_path) {
-      return jsonResponse({ error: "Material does not have a stored file yet." }, 400);
+      const message = "Material does not have a stored file yet.";
+      await updateMaterialIndexState(supabase, material.id, {
+        status: "Indexing failed",
+        index_status: "failed",
+        index_error: message,
+      });
+
+      return jsonResponse({ error: message, indexStatus: "failed", indexAttempts: indexAttempt }, 400);
     }
 
     const { data: file, error: downloadError } = await supabase.storage
@@ -261,13 +302,27 @@ Deno.serve(async (request) => {
     const normalizedText = normalizeText(extracted.text);
 
     if (!normalizedText) {
-      return jsonResponse({ error: "No extractable text was found in this material." }, 422);
+      const message = "No extractable text was found in this material.";
+      await updateMaterialIndexState(supabase, material.id, {
+        status: "Indexing failed",
+        index_status: "failed",
+        index_error: message,
+      });
+
+      return jsonResponse({ error: message, indexStatus: "failed", indexAttempts: indexAttempt }, 422);
     }
 
     const chunks = buildChunks(normalizedText, material.topics || []);
 
     if (!chunks.length) {
-      return jsonResponse({ error: "Not enough text was found to create searchable chunks." }, 422);
+      const message = "Not enough text was found to create searchable chunks.";
+      await updateMaterialIndexState(supabase, material.id, {
+        status: "Indexing failed",
+        index_status: "failed",
+        index_error: message,
+      });
+
+      return jsonResponse({ error: message, indexStatus: "failed", indexAttempts: indexAttempt }, 422);
     }
 
     const chunkRows = await createChunkRows(material, chunks);
@@ -284,32 +339,55 @@ Deno.serve(async (request) => {
     }
 
     const status = `Indexed ${chunkRows.length} chunks`;
-    const { error: updateError } = await supabase
-      .from("materials")
-      .update({
-        status,
-        page_count: extracted.pageCount || material.page_count || 0,
-        indexed_pages: extracted.pageCount || material.indexed_pages || 0,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", material.id);
-
-    if (updateError) {
-      throw updateError;
-    }
+    const pageCount = extracted.pageCount || material.page_count || 0;
+    const indexedPages = extracted.pageCount || material.indexed_pages || 0;
+    const indexedAt = new Date().toISOString();
+    await updateMaterialIndexState(supabase, material.id, {
+      status,
+      page_count: pageCount,
+      indexed_pages: indexedPages,
+      index_status: "indexed",
+      index_error: null,
+      index_attempts: indexAttempt,
+      chunk_count: chunkRows.length,
+      index_started_at: indexStartedAt,
+      indexed_at: indexedAt,
+    });
 
     return jsonResponse({
       materialId: material.id,
       materialClientId,
       chunkCount: chunkRows.length,
-      pageCount: extracted.pageCount || 0,
+      pageCount,
+      indexedPages,
       status,
+      indexStatus: "indexed",
+      indexAttempts: indexAttempt,
+      indexStartedAt,
+      indexedAt,
     });
   } catch (error) {
     console.error(error);
+    const message = error instanceof Error ? error.message : "Could not index material.";
+
+    if (supabase && material) {
+      try {
+        await updateMaterialIndexState(supabase, material.id, {
+          status: "Indexing failed",
+          index_status: "failed",
+          index_error: message,
+          index_attempts: indexAttempt || Number(material.index_attempts || 0),
+        });
+      } catch (updateError) {
+        console.error(updateError);
+      }
+    }
+
     return jsonResponse(
       {
-        error: error instanceof Error ? error.message : "Could not index material.",
+        error: message,
+        indexStatus: "failed",
+        indexAttempts: indexAttempt || undefined,
       },
       500,
     );

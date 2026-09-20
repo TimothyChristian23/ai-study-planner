@@ -632,6 +632,10 @@ textarea {
   margin-top: 4px;
 }
 
+.file-list .storage-meta-error {
+  color: var(--rose);
+}
+
 .file-actions,
 .deadline-actions,
 .suggestion-actions,
@@ -667,6 +671,11 @@ textarea {
 .file-actions .index-material-button {
   background: #e1f4f1;
   color: var(--teal);
+}
+
+.file-actions .index-material-button:disabled {
+  cursor: progress;
+  opacity: 0.62;
 }
 
 .file-actions .download-material-button {
