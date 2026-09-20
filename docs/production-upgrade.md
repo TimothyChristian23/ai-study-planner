@@ -27,6 +27,7 @@ This document tracks the path from the deployed static prototype to a production
 - Material indexing status fields for queued, running, indexed, and failed states, with retry attempt metadata
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
+- Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
 
 ## Setup Steps
@@ -65,8 +66,8 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add saved cloud answer hydration so server-created answers appear after load without duplication.
-2. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
+1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
+2. Add deployment-time Supabase smoke tests for migrations and Edge Functions.
 
 ## Security Notes
 

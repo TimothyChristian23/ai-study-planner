@@ -56,6 +56,7 @@
 - [x] Retrieve relevant passages for user questions
 - [x] Generate quizzes from selected materials
 - [x] Cite source documents in AI answers
+- [x] Hydrate saved cloud answer history without duplicates
 
 ## Phase 4: Adaptive Learning
 

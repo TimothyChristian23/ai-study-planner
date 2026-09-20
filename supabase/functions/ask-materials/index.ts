@@ -128,7 +128,16 @@ Deno.serve(async (request) => {
 
   try {
     const authorization = request.headers.get("Authorization") || "";
-    const { courseId, question } = await request.json();
+    const body = await request.json();
+    const { courseId, question } = body;
+    const questionClientId =
+      typeof body.questionClientId === "string" && body.questionClientId.trim()
+        ? body.questionClientId.trim()
+        : crypto.randomUUID();
+    const askedAt =
+      typeof body.askedAt === "string" && !Number.isNaN(Date.parse(body.askedAt))
+        ? body.askedAt
+        : new Date().toISOString();
 
     if (!authorization.startsWith("Bearer ")) {
       return jsonResponse({ error: "Missing user session." }, 401);
@@ -174,35 +183,56 @@ Deno.serve(async (request) => {
     const grounding = chunks.length >= 3 ? "Grounding: strong" : chunks.length >= 2 ? "Grounding: moderate" : "Grounding: light";
     const { data: savedQuestion, error: questionError } = await supabase
       .from("material_questions")
-      .insert({
-        course_id: courseId,
-        question: question.trim(),
-        answer,
-        grounding,
-      })
-      .select("id")
+      .upsert(
+        {
+          course_id: courseId,
+          client_id: questionClientId,
+          question: question.trim(),
+          answer,
+          grounding,
+          created_at: askedAt,
+        },
+        { onConflict: "course_id,client_id" },
+      )
+      .select("id, client_id, created_at")
       .single();
 
     if (questionError) {
       throw questionError;
     }
 
-    const citations = chunks.map((chunk) => ({
+    const citationRows = chunks.map((chunk, index) => ({
       course_id: courseId,
+      client_id: `${questionClientId}-citation-${index}`,
       material_question_id: savedQuestion.id,
       material_chunk_id: chunk.chunk_id,
       question: question.trim(),
+      source_material_name: chunk.material_name,
+      topic: chunk.topic || "General review",
       answer_excerpt: chunk.content.slice(0, 500),
       match_score: chunk.similarity,
+      created_at: askedAt,
     }));
 
-    const { error: citationError } = await supabase.from("answer_citations").insert(citations);
+    const { error: deleteCitationError } = await supabase
+      .from("answer_citations")
+      .delete()
+      .eq("material_question_id", savedQuestion.id);
+
+    if (deleteCitationError) {
+      throw deleteCitationError;
+    }
+
+    const { error: citationError } = await supabase.from("answer_citations").insert(citationRows);
 
     if (citationError) {
       throw citationError;
     }
 
     return jsonResponse({
+      questionId: savedQuestion.id,
+      questionClientId: savedQuestion.client_id || questionClientId,
+      askedAt: savedQuestion.created_at || askedAt,
       answer,
       grounding,
       citations: chunks.map((chunk) => ({

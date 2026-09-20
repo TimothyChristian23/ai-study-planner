@@ -1518,7 +1518,7 @@ function renderAnswerResult(result) {
     .join("");
 }
 
-async function answerFromCloudMaterials(question) {
+async function answerFromCloudMaterials(question, historyEntry = {}) {
   const client = getSupabaseClient();
 
   if (!client || !authSession?.user?.id) {
@@ -1542,6 +1542,8 @@ async function answerFromCloudMaterials(question) {
     body: {
       courseId: course.id,
       question,
+      questionClientId: historyEntry.id,
+      askedAt: historyEntry.askedAt,
     },
   });
 
@@ -1554,9 +1556,12 @@ async function answerFromCloudMaterials(question) {
   }
 
   return {
+    id: data?.questionClientId || historyEntry.id || makeId(),
+    questionId: data?.questionId || "",
     answer: data?.answer || "I could not generate a grounded answer from indexed cloud material.",
     grounding: data?.grounding || "Grounding: none",
     citations: Array.isArray(data?.citations) ? data.citations.map(normalizeAnswerCitation) : [],
+    askedAt: data?.askedAt || historyEntry.askedAt || new Date().toISOString(),
   };
 }
 
@@ -1564,6 +1569,10 @@ async function answerStudyQuestion() {
   const question = document.querySelector("#studyQuestion").value.trim();
   const answerButton = document.querySelector("#answerQuestion");
   const canUseCloud = canUseCloudAnswers();
+  const historyEntry = {
+    id: makeId(),
+    askedAt: new Date().toISOString(),
+  };
   let result = null;
 
   if (!question) {
@@ -1581,7 +1590,7 @@ async function answerStudyQuestion() {
   document.querySelector("#sourceList").innerHTML = "";
 
   try {
-    result = canUseCloud ? await answerFromCloudMaterials(question) : null;
+    result = canUseCloud ? await answerFromCloudMaterials(question, historyEntry) : null;
 
     if (result) {
       setAuthStatus("Answered from indexed cloud materials.");
@@ -1599,7 +1608,7 @@ async function answerStudyQuestion() {
   }
 
   renderAnswerResult(result);
-  recordAnswerHistory(question, result);
+  recordAnswerHistory(question, result, historyEntry);
   renderAnswerHistory();
   saveState();
   queueCloudAutosave("answer history");
@@ -1698,6 +1707,39 @@ function cloudSessionToLocal(session) {
   });
 }
 
+function getAnswerHistoryKey(entry = {}) {
+  return `${normalizeWhitespace(entry.question || "").toLowerCase()}::${normalizeWhitespace(entry.answer || "").toLowerCase()}`;
+}
+
+function getAnswerCitationKey(citation = {}) {
+  return [
+    normalizeWhitespace(citation.source || "").toLowerCase(),
+    normalizeWhitespace(citation.topic || "").toLowerCase(),
+    normalizeWhitespace(citation.snippet || "").toLowerCase().slice(0, 240),
+  ].join("::");
+}
+
+function mergeAnswerCitations(...citationGroups) {
+  const byKey = new Map();
+
+  citationGroups.flat().forEach((citation) => {
+    const normalizedCitation = normalizeAnswerCitation(citation);
+    const key = getAnswerCitationKey(normalizedCitation);
+
+    if (!key.replace(/:/g, "")) {
+      return;
+    }
+
+    const existing = byKey.get(key);
+
+    if (!existing || normalizedCitation.score > existing.score) {
+      byKey.set(key, normalizedCitation);
+    }
+  });
+
+  return [...byKey.values()].sort((a, b) => b.score - a.score).slice(0, 3);
+}
+
 function buildLoadedAnswerHistory(questions, citations) {
   const citationsByQuestionId = new Map();
 
@@ -1707,19 +1749,54 @@ function buildLoadedAnswerHistory(questions, citations) {
     citationsByQuestionId.set(citation.material_question_id, items);
   });
 
-  return questions.map((question) => ({
-    id: question.client_id || question.id,
-    question: question.question,
-    answer: question.answer,
-    grounding: question.grounding,
-    askedAt: question.created_at,
-    citations: (citationsByQuestionId.get(question.id) || []).map((citation) => ({
-      source: citation.source_material_name || "Uploaded material",
-      topic: citation.topic || "General review",
-      snippet: citation.answer_excerpt || "",
-      score: Number(citation.match_score) || 0,
-    })),
-  }));
+  const byAnswer = new Map();
+  const sortedQuestions = [...questions].sort(
+    (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+  );
+
+  sortedQuestions.forEach((question) => {
+    const entry = {
+      id: question.client_id || question.id,
+      question: question.question,
+      answer: question.answer,
+      grounding: question.grounding,
+      askedAt: question.created_at,
+      hasClientId: Boolean(question.client_id),
+      citations: (citationsByQuestionId.get(question.id) || []).map((citation) => ({
+        source: citation.source_material_name || "Uploaded material",
+        topic: citation.topic || "General review",
+        snippet: citation.answer_excerpt || "",
+        score: Number(citation.match_score) || 0,
+      })),
+    };
+    const key = getAnswerHistoryKey(entry);
+    const existing = byAnswer.get(key);
+
+    if (!existing) {
+      byAnswer.set(key, entry);
+      return;
+    }
+
+    let preferred = existing;
+
+    if (!existing.hasClientId && entry.hasClientId) {
+      preferred = entry;
+    } else if (existing.hasClientId === entry.hasClientId) {
+      const existingTime = new Date(existing.askedAt || 0).getTime();
+      const entryTime = new Date(entry.askedAt || 0).getTime();
+      preferred = entryTime > existingTime ? entry : existing;
+    }
+
+    preferred.citations = mergeAnswerCitations(preferred.citations, existing.citations, entry.citations);
+    byAnswer.set(key, preferred);
+  });
+
+  return [...byAnswer.values()]
+    .map(({ hasClientId, ...entry }) => ({
+      ...entry,
+      citations: mergeAnswerCitations(entry.citations),
+    }))
+    .sort((a, b) => new Date(b.askedAt).getTime() - new Date(a.askedAt).getTime());
 }
 
 async function loadPlannerFromCloud(options = {}) {
@@ -2539,23 +2616,27 @@ function getAnswerHistory() {
   );
 }
 
-function recordAnswerHistory(question, result) {
+function recordAnswerHistory(question, result, options = {}) {
   if (!question) {
     return;
   }
 
   const citations = Array.isArray(result.citations) ? result.citations : [];
+  const entry = {
+    id: result.id || result.questionClientId || options.id || makeId(),
+    question,
+    answer: result.answer,
+    grounding: result.grounding,
+    citations: citations.slice(0, 3).map(normalizeAnswerCitation),
+    askedAt: result.askedAt || options.askedAt || new Date().toISOString(),
+  };
+  const answerKey = getAnswerHistoryKey(entry);
 
   state.answerHistory = [
-    {
-      id: makeId(),
-      question,
-      answer: result.answer,
-      grounding: result.grounding,
-      citations: citations.slice(0, 3).map(normalizeAnswerCitation),
-      askedAt: new Date().toISOString(),
-    },
-    ...(state.answerHistory || []),
+    entry,
+    ...(state.answerHistory || []).filter(
+      (item) => item.id !== entry.id && getAnswerHistoryKey(item) !== answerKey,
+    ),
   ].slice(0, 20);
 }
 
