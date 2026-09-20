@@ -47,6 +47,15 @@
               <button class="secondary-button" type="button" id="syncCloud">Sync now</button>
               <button class="secondary-button" type="button" id="loadCloud">Load cloud</button>
             </div>
+            <div class="cloud-conflict" id="cloudConflictPanel" hidden>
+              <strong>Cloud conflict</strong>
+              <span id="cloudConflictSummary"></span>
+              <div class="cloud-conflict-actions">
+                <button class="secondary-button" type="button" id="resolveLoadCloud">Load cloud</button>
+                <button class="secondary-button" type="button" id="resolveKeepLocal">Keep local</button>
+                <button class="secondary-button" type="button" id="resolveOverwriteCloud">Overwrite</button>
+              </div>
+            </div>
             <button class="secondary-button quiet-button" type="button" id="createCloudCourse">New cloud course</button>
             <button class="secondary-button quiet-button" type="button" id="signOut">Sign out</button>
           </div>

@@ -205,6 +205,41 @@ h4 {
   gap: 8px;
 }
 
+.cloud-conflict {
+  border: 1px solid rgba(189, 122, 22, 0.42);
+  border-radius: 8px;
+  background: rgba(255, 242, 220, 0.08);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.cloud-conflict[hidden] {
+  display: none;
+}
+
+.cloud-conflict strong,
+.cloud-conflict span {
+  display: block;
+}
+
+.cloud-conflict strong {
+  color: #ffe4b5;
+  font-size: 0.86rem;
+}
+
+.cloud-conflict span {
+  color: #d5dfed;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.cloud-conflict-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 .auth-panel .secondary-button {
   min-height: 38px;
   padding: 9px 10px;

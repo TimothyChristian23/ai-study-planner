@@ -21,6 +21,7 @@ This document tracks the path from the deployed static prototype to a production
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
 - Cloud course picker for selecting existing planner records or creating a new cloud course from the current local planner
 - Debounced cloud autosave for signed-in users, with manual sync/load safety controls and a remote-change guard before autosave overwrites existing cloud data
+- Account-panel conflict resolution actions for loading the cloud copy, keeping local changes, or explicitly overwriting cloud
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
@@ -60,11 +61,10 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add richer conflict resolution for users switching between changed cloud planners.
-2. Move quiz generation from local heuristics to retrieved material chunks.
-3. Add signed download/reprocess tools for stored course files.
-4. Add background retries and index status fields for longer documents.
-5. Add saved cloud answer hydration so server-created answers appear after load without duplication.
+1. Move quiz generation from local heuristics to retrieved material chunks.
+2. Add signed download/reprocess tools for stored course files.
+3. Add background retries and index status fields for longer documents.
+4. Add saved cloud answer hydration so server-created answers appear after load without duplication.
 
 ## Security Notes
 

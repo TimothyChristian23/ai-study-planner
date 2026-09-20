@@ -61,6 +61,7 @@ This repo currently includes:
 - Supabase-auth-ready account panel with sign in, sign up, and sign out controls
 - Cloud course picker for loading, syncing, and creating multiple planner records
 - Supabase autosave for course setup, materials metadata, deadlines, schedules, progress, quiz attempts, and grounded question history, plus manual sync/load safety controls
+- Cloud conflict resolution actions for loading cloud, keeping local, or overwriting a changed planner
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
 - Server-side material indexing function for stored PDFs and text-like files, including chunking and OpenAI embeddings
 - Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with local retrieval fallback

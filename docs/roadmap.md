@@ -45,6 +45,7 @@
 - [x] Persist generated schedules from deadlines and available study time
 - [x] Replace manual sync/load with autosave and conflict handling
 - [x] Add per-course selection for multiple cloud planners
+- [x] Add cloud conflict resolution actions
 
 ## Phase 3: AI Study Engine
 
