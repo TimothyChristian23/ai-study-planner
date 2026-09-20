@@ -1183,6 +1183,11 @@ textarea {
   gap: 10px;
 }
 
+.quiz-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .quiz-performance {
   display: grid;
   gap: 12px;
@@ -1574,6 +1579,8 @@ textarea {
 
   .topbar .primary-button,
   .topbar .secondary-button,
+  .quiz-actions,
+  .quiz-actions .secondary-button,
   .upload-actions .secondary-button,
   .deadline-actions button,
   .suggestion-actions button,

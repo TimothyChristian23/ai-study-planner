@@ -65,6 +65,7 @@ This repo currently includes:
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
 - Server-side material indexing function for stored PDFs and text-like files, including chunking and OpenAI embeddings
 - Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with local retrieval fallback
+- Signed-in quiz generation from indexed cloud material chunks, with local quiz fallback
 - Responsive dashboard layout with mobile-friendly navigation and controls
 
 For the most reliable PDF indexing, run a local static server and open the served URL:

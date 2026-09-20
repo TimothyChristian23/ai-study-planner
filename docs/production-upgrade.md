@@ -25,6 +25,7 @@ This document tracks the path from the deployed static prototype to a production
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 - `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
+- `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
 
 ## Setup Steps
 
@@ -57,14 +58,14 @@ This document tracks the path from the deployed static prototype to a production
    ```powershell
    supabase functions deploy ask-materials
    supabase functions deploy index-material
+   supabase functions deploy generate-quiz
    ```
 
 ## Next Implementation Steps
 
-1. Move quiz generation from local heuristics to retrieved material chunks.
-2. Add signed download/reprocess tools for stored course files.
-3. Add background retries and index status fields for longer documents.
-4. Add saved cloud answer hydration so server-created answers appear after load without duplication.
+1. Add signed download/reprocess tools for stored course files.
+2. Add background retries and index status fields for longer documents.
+3. Add saved cloud answer hydration so server-created answers appear after load without duplication.
 
 ## Security Notes
 

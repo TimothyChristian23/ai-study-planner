@@ -162,6 +162,7 @@ const defaultState = {
   schedule: [],
   topicProgress: {},
   completedSessions: {},
+  quizItems: [],
   quizHistory: [],
   answerHistory: [],
   materialSearchQuery: "",
@@ -233,6 +234,10 @@ function normalizeState(rawState = {}) {
   merged.schedule = Array.isArray(merged.schedule) ? merged.schedule.map(withSessionId) : [];
   merged.topicProgress = merged.topicProgress || {};
   merged.completedSessions = merged.completedSessions || {};
+  merged.quizItems = (merged.quizItems || [])
+    .map(normalizeQuizItem)
+    .filter((item) => item.question && item.answer)
+    .slice(0, 40);
   merged.quizHistory = (merged.quizHistory || [])
     .map((attempt) => ({
       ...attempt,
@@ -396,6 +401,17 @@ function getCloudSyncSnapshot() {
       minutes: Number(session.minutes) || 0,
       notes: session.notes || "",
       completedAt: session.completedAt || "",
+    })),
+    quizItems: sortById(state.quizItems || []).map((item) => ({
+      id: item.id,
+      topic: item.topic || "General review",
+      question: item.question,
+      answer: item.answer,
+      source: item.source || "Indexed material",
+      sourceExcerpt: item.sourceExcerpt || "",
+      materialChunkId: item.materialChunkId || "",
+      generatedAt: item.generatedAt || "",
+      cloudGenerated: Boolean(item.cloudGenerated),
     })),
     topicProgress: Object.fromEntries(
       Object.entries(state.topicProgress || {})
@@ -1427,6 +1443,75 @@ async function answerStudyQuestion() {
   queueCloudAutosave("answer history");
 }
 
+function getCloudQuizTopic() {
+  const reviewTopic = getSpacedReviewItems()[0]?.name;
+  const weakTopic = buildTopics().find((topic) => topic.name !== "Upload materials")?.name;
+
+  return reviewTopic || weakTopic || state.course.name || "General review";
+}
+
+async function generateQuizFromCloud() {
+  const client = getSupabaseClient();
+  const generateButton = document.querySelector("#generateCloudQuiz");
+  const feedback = document.querySelector("#quizFeedback");
+
+  if (!client || !authSession?.user?.id) {
+    feedback.textContent = "Sign in and configure Supabase to generate quizzes from indexed cloud materials.";
+    return;
+  }
+
+  generateButton.disabled = true;
+  feedback.textContent = "Generating quiz cards from indexed cloud materials...";
+
+  try {
+    const synced = await syncPlannerToCloud({ source: "autosave" });
+
+    if (!synced) {
+      throw new Error("Cloud sync is paused. Resolve cloud state before generating quiz cards.");
+    }
+
+    const course = await getCloudCourse(client);
+
+    if (!course?.id) {
+      throw new Error("Cloud course was not found. Sync the planner first.");
+    }
+
+    const topic = getCloudQuizTopic();
+    const { data, error } = await client.functions.invoke("generate-quiz", {
+      body: {
+        courseId: course.id,
+        topic,
+        count: 5,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    const quizItems = Array.isArray(data?.quizItems) ? data.quizItems.map(normalizeQuizItem) : [];
+
+    if (!quizItems.length) {
+      throw new Error("No quiz cards were generated from indexed material yet.");
+    }
+
+    mergeQuizItems(quizItems);
+    quizAnswerVisible = false;
+    state.questionIndex = 0;
+    renderAll();
+    feedback.textContent = `Generated ${quizItems.length} cloud quiz card${quizItems.length === 1 ? "" : "s"} for ${topic}.`;
+  } catch (error) {
+    console.error(error);
+    feedback.textContent = error?.message || "Cloud quiz generation failed. Index materials first, then try again.";
+  } finally {
+    generateButton.disabled = false;
+  }
+}
+
 async function readCourseRows(client, table, courseId, orderColumn = "created_at") {
   const { data, error } = await client.from(table).select("*").eq("course_id", courseId).order(orderColumn);
 
@@ -1515,6 +1600,7 @@ async function loadPlannerFromCloud(options = {}) {
       deadlines,
       studySessions,
       studyLogs,
+      quizItems,
       topicProgressRows,
       quizAttempts,
       materialQuestions,
@@ -1524,6 +1610,7 @@ async function loadPlannerFromCloud(options = {}) {
       readCourseRows(client, "deadlines", courseId),
       readCourseRows(client, "study_sessions", courseId, "scheduled_for"),
       readCourseRows(client, "study_session_logs", courseId, "completed_at"),
+      readCourseRows(client, "quiz_items", courseId),
       readCourseRows(client, "topic_progress", courseId, "topic"),
       readCourseRows(client, "quiz_attempts", courseId, "answered_at"),
       readCourseRows(client, "material_questions", courseId),
@@ -1598,6 +1685,7 @@ async function loadPlannerFromCloud(options = {}) {
       suggestedDeadlines: [],
       schedule: localSchedule,
       completedSessions,
+      quizItems: quizItems.map(normalizeQuizItem),
       topicProgress: Object.fromEntries(
         topicProgressRows.map((progress) => [
           progress.topic,
@@ -2238,6 +2326,36 @@ function getQuizStreak(history = getQuizHistory()) {
   return streak;
 }
 
+function normalizeQuizItem(item = {}) {
+  return {
+    id: item.id || item.client_id || makeId(),
+    topic: item.topic || "General review",
+    question: item.question || "",
+    answer: item.answer || "",
+    source: item.source || item.source_material_name || "Indexed material",
+    sourceExcerpt: item.sourceExcerpt || item.source_excerpt || "",
+    materialChunkId: item.materialChunkId || item.material_chunk_id || "",
+    generatedAt: item.generatedAt || item.created_at || new Date().toISOString(),
+    cloudGenerated: Boolean(item.cloudGenerated || item.materialChunkId || item.material_chunk_id),
+  };
+}
+
+function mergeQuizItems(incomingItems) {
+  const byQuestion = new Map((state.quizItems || []).map((item) => [item.question.toLowerCase(), item]));
+
+  incomingItems.map(normalizeQuizItem).forEach((item) => {
+    if (!item.question || !item.answer) {
+      return;
+    }
+
+    byQuestion.set(item.question.toLowerCase(), item);
+  });
+
+  state.quizItems = [...byQuestion.values()]
+    .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())
+    .slice(0, 40);
+}
+
 function normalizeAnswerCitation(citation = {}) {
   return {
     source: citation.source || "Uploaded material",
@@ -2800,6 +2918,7 @@ function createQuestionFromSentence(sentence, material) {
 }
 
 function buildQuestions() {
+  const cloudQuestions = (state.quizItems || []).map(normalizeQuizItem).filter((item) => item.question && item.answer);
   const sourceBackedQuestions = state.materials
     .filter((material) => material.text)
     .flatMap((material) =>
@@ -2809,6 +2928,10 @@ function buildQuestions() {
         .map((sentence) => createQuestionFromSentence(sentence, material)),
     )
     .slice(0, 12);
+
+  if (cloudQuestions.length) {
+    return [...cloudQuestions, ...sourceBackedQuestions].slice(0, 12);
+  }
 
   if (sourceBackedQuestions.length) {
     return sourceBackedQuestions;
@@ -4441,6 +4564,7 @@ document.querySelector("#clearMaterials").addEventListener("click", () => {
     schedule: [],
     topicProgress: {},
     completedSessions: {},
+    quizItems: [],
     quizHistory: [],
     answerHistory: [],
     materialSearchQuery: "",
@@ -4458,6 +4582,8 @@ document.querySelector("#nextQuestion").addEventListener("click", () => {
   renderQuestion();
   saveState();
 });
+
+document.querySelector("#generateCloudQuiz").addEventListener("click", generateQuizFromCloud);
 
 document.querySelector("#showAnswer").addEventListener("click", () => {
   quizAnswerVisible = !quizAnswerVisible;
