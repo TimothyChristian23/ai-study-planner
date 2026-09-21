@@ -2,6 +2,8 @@
 
 Use this checklist after creating the Supabase project and before relying on the `Supabase Smoke Tests` GitHub Actions workflow.
 
+For domain, auth redirect, monitoring, rollback, and release-readiness checks, use `docs/production-hardening.md` alongside this setup guide.
+
 ## Supabase Setup
 
 1. Create or select the Supabase project for AI Study Planner.

@@ -126,4 +126,4 @@ The smoke runner validates deployed table columns with `limit=0`, checks the sta
 
 ## Roadmap
 
-See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, `docs/production-upgrade.md` for the production migration plan, `docs/deployment-smoke-setup.md` for deployment smoke-test setup, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.
+See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, `docs/production-upgrade.md` for the production migration plan, `docs/deployment-smoke-setup.md` for deployment smoke-test setup, `docs/production-hardening.md` for launch hardening and rollback, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.

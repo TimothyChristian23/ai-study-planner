@@ -36,6 +36,7 @@ This document tracks the path from the deployed static prototype to a production
 - Authenticated storage smoke checks for private `course-materials` upload, download, signed URL, verification, and cleanup
 - Optional seeded AI fixture smoke checks for deployed material Q&A and quiz generation over temporary vector chunks
 - `docs/deployment-smoke-setup.md` for GitHub secrets, variables, Supabase setup, smoke-test modes, result interpretation, and cleanup notes
+- `docs/production-hardening.md` for domain, auth redirect, monitoring, worker scheduling, rollback, and release checklist coverage
 
 ## Setup Steps
 
@@ -108,10 +109,12 @@ This document tracks the path from the deployed static prototype to a production
    node scripts/supabase-smoke.mjs
    ```
 
+11. Review `docs/production-hardening.md` before publicly sharing the production-backed app.
+
 ## Next Implementation Steps
 
-1. Add production deployment hardening notes for domain, auth redirects, monitoring, worker scheduling, and rollback.
-2. Add operational dashboards or alerts for failed indexing jobs, Edge Function errors, and storage upload failures.
+1. Add operational dashboards or alerts for failed indexing jobs, Edge Function errors, and storage upload failures.
+2. Run the full production smoke suite against the real Supabase project after the latest migrations and functions are deployed.
 
 ## Security Notes
 
