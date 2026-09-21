@@ -4,18 +4,18 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
 
 ## Deployment Snapshot
 
-- Validation date:
-- App URL:
-- Supabase project:
-- Git commit:
-- Database migrations applied:
+- Validation date: 2026-09-21
+- App URL: `http://localhost:4173` for local smoke; GitHub Pages redeploy pending after commit push
+- Supabase project: `yawmgfvdkfubazucgyec`
+- Git commit: deployment/config commit in repository history
+- Database migrations applied: `0001_initial_schema.sql` through `0004_material_index_jobs.sql`
 - Edge Functions deployed:
   - `ask-materials`
   - `index-material`
   - `process-index-jobs`
   - `generate-quiz`
-- Worker schedule:
-- Smoke-test user:
+- Worker schedule: pending
+- Smoke-test user: pending
 
 ## Smoke Suite
 
@@ -32,13 +32,13 @@ node scripts/supabase-smoke.mjs
 
 Result:
 
-- Static app assets:
-- REST schema:
-- Edge Function validation:
-- Authenticated RLS CRUD:
-- Authenticated Storage:
-- Cleanup:
-- Notes:
+- Static app assets: passed against `http://localhost:4173`
+- REST schema: passed for all checked tables
+- Edge Function validation: passed for validation-only paths that do not call OpenAI
+- Authenticated RLS CRUD: not run; smoke-test user credentials were not configured
+- Authenticated Storage: not run; smoke-test user credentials were not configured
+- Cleanup: no authenticated fixture data created
+- Notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`
 
 ## Optional AI Fixture
 
@@ -52,11 +52,11 @@ node scripts/supabase-smoke.mjs
 
 Result:
 
-- Fixture embeddings:
-- Material Q&A:
-- Quiz generation:
-- Cleanup:
-- Notes:
+- Fixture embeddings: pending
+- Material Q&A: pending
+- Quiz generation: pending
+- Cleanup: pending
+- Notes: requires `OPENAI_API_KEY` and smoke-test user credentials
 
 ## Index Job Monitor
 
@@ -70,11 +70,11 @@ node scripts/index-job-monitor.mjs
 
 Result:
 
-- Failed jobs:
-- Stale running jobs:
-- Overdue queued jobs:
-- Material index status counts:
-- Notes:
+- Failed jobs: pending
+- Stale running jobs: pending
+- Overdue queued jobs: pending
+- Material index status counts: pending
+- Notes: requires local `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Manual User Flow
 

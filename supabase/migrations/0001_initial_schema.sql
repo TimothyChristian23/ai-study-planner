@@ -49,7 +49,7 @@ create table public.material_chunks (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   chunk_index integer not null,
   content text not null,
-  embedding vector(1536),
+  embedding extensions.vector(1536),
   source_page integer,
   topic text,
   created_at timestamptz not null default now(),
@@ -143,7 +143,7 @@ create table public.answer_citations (
 
 create index materials_course_id_idx on public.materials(course_id);
 create index material_chunks_course_id_idx on public.material_chunks(course_id);
-create index material_chunks_embedding_idx on public.material_chunks using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+create index material_chunks_embedding_idx on public.material_chunks using ivfflat (embedding extensions.vector_cosine_ops) with (lists = 100);
 create index deadlines_course_id_idx on public.deadlines(course_id);
 create index study_sessions_course_id_idx on public.study_sessions(course_id);
 create index quiz_attempts_course_id_idx on public.quiz_attempts(course_id);
@@ -254,7 +254,7 @@ create policy "Users can delete own course files" on storage.objects
   );
 
 create or replace function public.match_material_chunks(
-  query_embedding vector(1536),
+  query_embedding extensions.vector(1536),
   match_course_id uuid,
   match_count integer default 5,
   similarity_threshold double precision default 0.68
@@ -270,7 +270,7 @@ returns table (
 language sql
 stable
 security invoker
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     material_chunks.id as chunk_id,
