@@ -11,6 +11,7 @@ out/
 .env
 .env.*
 !.env.example
+supabase/.temp/
 
 # Editors and OS files
 .vscode/
