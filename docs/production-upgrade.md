@@ -31,6 +31,7 @@ This document tracks the path from the deployed static prototype to a production
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
+- Authenticated storage smoke checks for private `course-materials` upload, download, signed URL, verification, and cleanup
 
 ## Setup Steps
 
@@ -86,7 +87,7 @@ This document tracks the path from the deployed static prototype to a production
 ## Next Implementation Steps
 
 1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add storage upload/download checks to the authenticated smoke path.
+2. Add a small seeded end-to-end cloud fixture for quiz generation and material Q&A smoke checks.
 
 ## Security Notes
 

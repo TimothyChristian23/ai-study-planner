@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 10000;
+const MATERIAL_STORAGE_BUCKET = "course-materials";
 const root = resolve(import.meta.dirname, "..");
 
 const tableChecks = [
@@ -175,6 +176,13 @@ function buildHeaders({ supabaseAnonKey, authToken = "", includeJson = false }) 
 
 function encodeFilterValue(value) {
   return encodeURIComponent(String(value));
+}
+
+function encodeStoragePath(path) {
+  return String(path)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 }
 
 async function signInSmokeUser({ supabaseUrl, supabaseAnonKey, email, password }) {
@@ -383,6 +391,147 @@ async function insertSmokeRow({ supabaseUrl, supabaseAnonKey, authToken, table, 
   return { response, data, row: getRepresentationRow(data) };
 }
 
+async function readStorageResponseBody(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return readResponseBody(response);
+  }
+
+  return response.text();
+}
+
+async function storageRequest({ supabaseUrl, supabaseAnonKey, authToken = "", path = "", method = "GET", body, headers = {} }) {
+  const response = await fetchWithTimeout(`${supabaseUrl}/storage/v1${path}`, {
+    method,
+    headers: {
+      apikey: supabaseAnonKey,
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...headers,
+    },
+    ...(body !== undefined ? { body } : {}),
+  });
+  const data = await readStorageResponseBody(response);
+
+  return { response, data };
+}
+
+async function deleteSmokeStorageObject({ supabaseUrl, supabaseAnonKey, authToken, objectPath }) {
+  const deleteResult = await storageRequest({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken,
+    path: `/object/${MATERIAL_STORAGE_BUCKET}`,
+    method: "DELETE",
+    body: JSON.stringify({ prefixes: [objectPath] }),
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (deleteResult.response.ok) {
+    return deleteResult;
+  }
+
+  return storageRequest({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken,
+    path: `/object/${MATERIAL_STORAGE_BUCKET}/${encodeStoragePath(objectPath)}`,
+    method: "DELETE",
+  });
+}
+
+async function checkAuthenticatedStorage({ supabaseUrl, supabaseAnonKey, session, clientId }) {
+  const content = `AI Study Planner storage smoke ${clientId}`;
+  const objectPath = `${session.user.id}/${clientId}/smoke-notes.txt`;
+  let uploaded = false;
+
+  try {
+    const uploadResult = await storageRequest({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      path: `/object/${MATERIAL_STORAGE_BUCKET}/${encodeStoragePath(objectPath)}`,
+      method: "POST",
+      body: content,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "60",
+        "x-upsert": "false",
+      },
+    });
+
+    if (![200, 201].includes(uploadResult.response.status)) {
+      fail("Authenticated storage upload", `Received ${uploadResult.response.status}: ${truncate(JSON.stringify(uploadResult.data))}`);
+      return;
+    }
+
+    uploaded = true;
+    pass("Authenticated storage upload", `Uploaded ${objectPath}.`);
+
+    const downloadResult = await storageRequest({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      path: `/object/authenticated/${MATERIAL_STORAGE_BUCKET}/${encodeStoragePath(objectPath)}`,
+    });
+
+    if (!downloadResult.response.ok || downloadResult.data !== content) {
+      fail(
+        "Authenticated storage download",
+        `Received ${downloadResult.response.status}: ${truncate(typeof downloadResult.data === "string" ? downloadResult.data : JSON.stringify(downloadResult.data))}`,
+      );
+      return;
+    }
+
+    pass("Authenticated storage download", "Downloaded matching smoke file contents.");
+
+    const signedResult = await storageRequest({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      path: `/object/sign/${MATERIAL_STORAGE_BUCKET}/${encodeStoragePath(objectPath)}`,
+      method: "POST",
+      body: JSON.stringify({ expiresIn: 60 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const signedPath = signedResult.data?.signedURL || signedResult.data?.signedUrl || signedResult.data?.signed_url || "";
+
+    if (!signedResult.response.ok || !signedPath) {
+      fail("Authenticated storage signed URL", `Received ${signedResult.response.status}: ${truncate(JSON.stringify(signedResult.data))}`);
+      return;
+    }
+
+    const signedUrl = signedPath.startsWith("http")
+      ? signedPath
+      : `${supabaseUrl}/storage/v1${signedPath.startsWith("/") ? signedPath : `/${signedPath}`}`;
+    const signedDownload = await fetchWithTimeout(signedUrl);
+    const signedContent = await signedDownload.text();
+
+    if (!signedDownload.ok || signedContent !== content) {
+      fail("Authenticated storage signed URL", `Signed download received ${signedDownload.status}: ${truncate(signedContent)}`);
+      return;
+    }
+
+    pass("Authenticated storage signed URL", "Generated and downloaded a matching signed URL.");
+  } finally {
+    if (uploaded) {
+      const deleteResult = await deleteSmokeStorageObject({
+        supabaseUrl,
+        supabaseAnonKey,
+        authToken: session.accessToken,
+        objectPath,
+      });
+
+      if (deleteResult.response.ok) {
+        pass("Authenticated storage cleanup", "Deleted smoke storage object.");
+      } else {
+        fail("Authenticated storage cleanup", `Received ${deleteResult.response.status}: ${truncate(JSON.stringify(deleteResult.data))}`);
+      }
+    }
+  }
+}
+
 async function checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session }) {
   if (!session?.accessToken || !session?.user?.id) {
     warn(
@@ -525,6 +674,13 @@ async function checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session })
     }
 
     pass("Authenticated citation insert", `Created ${citationResult.row.client_id}.`);
+
+    await checkAuthenticatedStorage({
+      supabaseUrl,
+      supabaseAnonKey,
+      session,
+      clientId,
+    });
 
     const updateResult = await restRequest({
       supabaseUrl,

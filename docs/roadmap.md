@@ -50,6 +50,7 @@
 - [x] Add cloud material indexing status and retry metadata
 - [x] Add deployment-time Supabase smoke tests
 - [x] Add authenticated RLS CRUD smoke checks
+- [x] Add authenticated storage smoke checks
 
 ## Phase 3: AI Study Engine
 
