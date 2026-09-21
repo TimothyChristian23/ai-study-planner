@@ -5,9 +5,9 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
 ## Deployment Snapshot
 
 - Validation date: 2026-09-21
-- App URL: `http://localhost:4173` for local smoke; GitHub Pages redeploy pending after commit push
+- App URL: `https://timothychristian23.github.io/ai-study-planner`
 - Supabase project: `yawmgfvdkfubazucgyec`
-- Git commit: deployment/config commit in repository history
+- Git commit: `446f7b1` (`Configure live Supabase deployment`)
 - Database migrations applied: `0001_initial_schema.sql` through `0004_material_index_jobs.sql`
 - Edge Functions deployed:
   - `ask-materials`
@@ -32,13 +32,13 @@ node scripts/supabase-smoke.mjs
 
 Result:
 
-- Static app assets: passed against `http://localhost:4173`
+- Static app assets: passed against `https://timothychristian23.github.io/ai-study-planner`
 - REST schema: passed for all checked tables
 - Edge Function validation: passed for validation-only paths that do not call OpenAI
 - Authenticated RLS CRUD: not run; smoke-test user credentials were not configured
 - Authenticated Storage: not run; smoke-test user credentials were not configured
 - Cleanup: no authenticated fixture data created
-- Notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`
+- Notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
 
 ## Optional AI Fixture
 
