@@ -30,6 +30,7 @@ This document tracks the path from the deployed static prototype to a production
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
+- Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
 
 ## Setup Steps
 
@@ -74,10 +75,18 @@ This document tracks the path from the deployed static prototype to a production
    node scripts/supabase-smoke.mjs
    ```
 
+   Optional authenticated RLS pass:
+
+   ```powershell
+   $env:SUPABASE_SMOKE_EMAIL="smoke-user@example.com"
+   $env:SUPABASE_SMOKE_PASSWORD="dedicated-smoke-user-password"
+   node scripts/supabase-smoke.mjs
+   ```
+
 ## Next Implementation Steps
 
 1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add a dedicated authenticated test user flow for optional end-to-end Supabase smoke checks.
+2. Add storage upload/download checks to the authenticated smoke path.
 
 ## Security Notes
 

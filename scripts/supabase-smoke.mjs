@@ -173,6 +173,99 @@ function buildHeaders({ supabaseAnonKey, authToken = "", includeJson = false }) 
   };
 }
 
+function encodeFilterValue(value) {
+  return encodeURIComponent(String(value));
+}
+
+async function signInSmokeUser({ supabaseUrl, supabaseAnonKey, email, password }) {
+  if (!email || !password) {
+    return null;
+  }
+
+  const response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: buildHeaders({ supabaseAnonKey, includeJson: true }),
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await readResponseBody(response);
+
+  if (!response.ok || !body?.access_token || !body?.user?.id) {
+    fail("Authenticated smoke sign in", `Received ${response.status}: ${truncate(JSON.stringify(body))}`);
+    return null;
+  }
+
+  pass("Authenticated smoke sign in", `Signed in ${body.user.email || email}.`);
+
+  return {
+    accessToken: body.access_token,
+    user: body.user,
+  };
+}
+
+async function validateSmokeAccessToken({ supabaseUrl, supabaseAnonKey, accessToken }) {
+  if (!accessToken) {
+    return null;
+  }
+
+  const response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
+    headers: buildHeaders({ supabaseAnonKey, authToken: accessToken }),
+  });
+  const body = await readResponseBody(response);
+
+  if (!response.ok || !body?.id) {
+    fail("Authenticated smoke token", `Received ${response.status}: ${truncate(JSON.stringify(body))}`);
+    return null;
+  }
+
+  pass("Authenticated smoke token", `Validated ${body.email || body.id}.`);
+
+  return {
+    accessToken,
+    user: body,
+  };
+}
+
+async function getSmokeSession({ supabaseUrl, supabaseAnonKey, smokeAccessToken, smokeEmail, smokePassword }) {
+  const passwordSession = await signInSmokeUser({
+    supabaseUrl,
+    supabaseAnonKey,
+    email: smokeEmail,
+    password: smokePassword,
+  });
+
+  if (passwordSession) {
+    return passwordSession;
+  }
+
+  if (smokeEmail || smokePassword) {
+    return null;
+  }
+
+  return validateSmokeAccessToken({
+    supabaseUrl,
+    supabaseAnonKey,
+    accessToken: smokeAccessToken,
+  });
+}
+
+async function restRequest({ supabaseUrl, supabaseAnonKey, authToken, table, query = "", method = "GET", body, prefer = "" }) {
+  const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/${table}${query ? `?${query}` : ""}`, {
+    method,
+    headers: {
+      ...buildHeaders({ supabaseAnonKey, authToken, includeJson: body !== undefined }),
+      ...(prefer ? { Prefer: prefer } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await readResponseBody(response);
+
+  return { response, data };
+}
+
+function getRepresentationRow(data) {
+  return Array.isArray(data) ? data[0] : data;
+}
+
 async function checkAppUrl(appUrl) {
   if (!appUrl) {
     warn("Static app smoke", "AI_STUDY_APP_URL is not set; skipping app asset checks.");
@@ -275,13 +368,227 @@ async function checkEdgeFunctions({ supabaseUrl, supabaseAnonKey, functionAuthTo
   }
 }
 
+async function insertSmokeRow({ supabaseUrl, supabaseAnonKey, authToken, table, payload, select = "*" }) {
+  const { response, data } = await restRequest({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken,
+    table,
+    query: `select=${encodeURIComponent(select)}`,
+    method: "POST",
+    body: payload,
+    prefer: "return=representation",
+  });
+
+  return { response, data, row: getRepresentationRow(data) };
+}
+
+async function checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session }) {
+  if (!session?.accessToken || !session?.user?.id) {
+    warn(
+      "Authenticated RLS CRUD",
+      "Set SUPABASE_SMOKE_EMAIL/SUPABASE_SMOKE_PASSWORD or SUPABASE_SMOKE_ACCESS_TOKEN to run isolated CRUD checks.",
+    );
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const clientPrefix = process.env.SUPABASE_SMOKE_CLIENT_PREFIX || "ai-study-smoke";
+  const clientId = `${clientPrefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  let courseId = "";
+
+  try {
+    const courseResult = await insertSmokeRow({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "courses",
+      payload: {
+        client_id: clientId,
+        name: "Smoke Test Course",
+        term: "Smoke",
+        exam_date: "2026-12-31",
+        daily_minutes: 30,
+        preferred_start_time: "18:00",
+        study_days: [1, 2, 3],
+        updated_at: now,
+      },
+      select: "id,client_id,name",
+    });
+
+    if (!courseResult.response.ok || !courseResult.row?.id) {
+      fail("Authenticated course insert", `Received ${courseResult.response.status}: ${truncate(JSON.stringify(courseResult.data))}`);
+      return;
+    }
+
+    courseId = courseResult.row.id;
+    pass("Authenticated course insert", `Created ${courseResult.row.client_id}.`);
+
+    const materialResult = await insertSmokeRow({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "materials",
+      payload: {
+        course_id: courseId,
+        client_id: `${clientId}-material`,
+        file_name: "smoke-notes.txt",
+        file_type: "Notes",
+        status: "Saved",
+        size_bytes: 17,
+        page_count: 0,
+        indexed_pages: 0,
+        index_status: "not_started",
+        index_attempts: 0,
+        chunk_count: 0,
+        topics: ["Smoke test"],
+      },
+      select: "id,client_id,index_status",
+    });
+
+    if (!materialResult.response.ok || !materialResult.row?.id) {
+      fail("Authenticated material insert", `Received ${materialResult.response.status}: ${truncate(JSON.stringify(materialResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated material insert", `Created ${materialResult.row.client_id}.`);
+
+    const deadlineResult = await insertSmokeRow({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "deadlines",
+      payload: {
+        course_id: courseId,
+        client_id: `${clientId}-deadline`,
+        title: "Smoke deadline",
+        type: "Assignment",
+        due_date: "2026-12-15",
+        topic: "Smoke test",
+        completed: false,
+      },
+      select: "id,client_id,title",
+    });
+
+    if (!deadlineResult.response.ok || !deadlineResult.row?.id) {
+      fail("Authenticated deadline insert", `Received ${deadlineResult.response.status}: ${truncate(JSON.stringify(deadlineResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated deadline insert", `Created ${deadlineResult.row.client_id}.`);
+
+    const questionResult = await insertSmokeRow({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "material_questions",
+      payload: {
+        course_id: courseId,
+        client_id: `${clientId}-question`,
+        question: "What did the smoke test verify?",
+        answer: "It verified authenticated RLS CRUD.",
+        grounding: "Grounding: smoke",
+        created_at: now,
+      },
+      select: "id,client_id,question",
+    });
+
+    if (!questionResult.response.ok || !questionResult.row?.id) {
+      fail("Authenticated question insert", `Received ${questionResult.response.status}: ${truncate(JSON.stringify(questionResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated question insert", `Created ${questionResult.row.client_id}.`);
+
+    const citationResult = await insertSmokeRow({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "answer_citations",
+      payload: {
+        course_id: courseId,
+        client_id: `${clientId}-citation-0`,
+        material_question_id: questionResult.row.id,
+        question: "What did the smoke test verify?",
+        source_material_name: "smoke-notes.txt",
+        topic: "Smoke test",
+        answer_excerpt: "Authenticated inserts should be isolated to the smoke test user.",
+        match_score: 1,
+        created_at: now,
+      },
+      select: "id,client_id,source_material_name",
+    });
+
+    if (!citationResult.response.ok || !citationResult.row?.id) {
+      fail("Authenticated citation insert", `Received ${citationResult.response.status}: ${truncate(JSON.stringify(citationResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated citation insert", `Created ${citationResult.row.client_id}.`);
+
+    const updateResult = await restRequest({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "courses",
+      query: `id=eq.${encodeFilterValue(courseId)}&select=id,name`,
+      method: "PATCH",
+      body: {
+        name: "Smoke Test Course Updated",
+        updated_at: new Date().toISOString(),
+      },
+      prefer: "return=representation",
+    });
+    const updatedCourse = getRepresentationRow(updateResult.data);
+
+    if (!updateResult.response.ok || updatedCourse?.name !== "Smoke Test Course Updated") {
+      fail("Authenticated course update", `Received ${updateResult.response.status}: ${truncate(JSON.stringify(updateResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated course update", "Updated smoke course name.");
+
+    const readResult = await restRequest({
+      supabaseUrl,
+      supabaseAnonKey,
+      authToken: session.accessToken,
+      table: "materials",
+      query: `course_id=eq.${encodeFilterValue(courseId)}&select=id,client_id`,
+    });
+
+    if (!readResult.response.ok || !Array.isArray(readResult.data) || readResult.data.length !== 1) {
+      fail("Authenticated material read", `Received ${readResult.response.status}: ${truncate(JSON.stringify(readResult.data))}`);
+      return;
+    }
+
+    pass("Authenticated material read", "Read isolated smoke material through RLS.");
+  } finally {
+    if (courseId) {
+      const deleteResult = await restRequest({
+        supabaseUrl,
+        supabaseAnonKey,
+        authToken: session.accessToken,
+        table: "courses",
+        query: `id=eq.${encodeFilterValue(courseId)}`,
+        method: "DELETE",
+      });
+
+      if (deleteResult.response.ok) {
+        pass("Authenticated cleanup", "Deleted smoke course and cascaded child rows.");
+      } else {
+        fail("Authenticated cleanup", `Received ${deleteResult.response.status}: ${truncate(JSON.stringify(deleteResult.data))}`);
+      }
+    }
+  }
+}
+
 async function main() {
   const fallback = readConfigFallback();
   const supabaseUrl = cleanBaseUrl(process.env.SUPABASE_URL || fallback.supabaseUrl);
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || fallback.supabaseAnonKey;
   const smokeAccessToken = process.env.SUPABASE_SMOKE_ACCESS_TOKEN || "";
-  const restAuthToken = smokeAccessToken || (isJwt(supabaseAnonKey) ? supabaseAnonKey : "");
-  const functionAuthToken = smokeAccessToken || supabaseAnonKey;
+  const smokeEmail = process.env.SUPABASE_SMOKE_EMAIL || "";
+  const smokePassword = process.env.SUPABASE_SMOKE_PASSWORD || "";
 
   if (!supabaseUrl || !supabaseAnonKey) {
     fail(
@@ -294,16 +601,20 @@ async function main() {
 
   pass("Smoke configuration", `Using ${supabaseUrl}.`);
 
-  if (!smokeAccessToken) {
-    warn(
-      "Authenticated smoke token",
-      "SUPABASE_SMOKE_ACCESS_TOKEN is not set; destructive/user-specific checks will stay skipped.",
-    );
-  }
+  const smokeSession = await getSmokeSession({
+    supabaseUrl,
+    supabaseAnonKey,
+    smokeAccessToken,
+    smokeEmail,
+    smokePassword,
+  });
+  const restAuthToken = smokeSession?.accessToken || (isJwt(supabaseAnonKey) ? supabaseAnonKey : "");
+  const functionAuthToken = smokeSession?.accessToken || smokeAccessToken || supabaseAnonKey;
 
   await checkAppUrl(process.env.AI_STUDY_APP_URL || "");
   await checkRestSchema({ supabaseUrl, supabaseAnonKey, authToken: restAuthToken });
   await checkEdgeFunctions({ supabaseUrl, supabaseAnonKey, functionAuthToken });
+  await checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session: smokeSession });
 
   const failedCount = results.filter((result) => result.status === "FAIL").length;
   const warningCount = results.filter((result) => result.status === "WARN").length;

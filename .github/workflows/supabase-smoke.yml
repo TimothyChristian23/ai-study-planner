@@ -18,6 +18,8 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SMOKE_EMAIL: ${{ secrets.SUPABASE_SMOKE_EMAIL }}
+      SUPABASE_SMOKE_PASSWORD: ${{ secrets.SUPABASE_SMOKE_PASSWORD }}
       SUPABASE_SMOKE_ACCESS_TOKEN: ${{ secrets.SUPABASE_SMOKE_ACCESS_TOKEN }}
       AI_STUDY_APP_URL: ${{ vars.AI_STUDY_APP_URL || 'https://timothychristian23.github.io/ai-study-planner' }}
     steps:

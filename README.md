@@ -88,7 +88,15 @@ $env:AI_STUDY_APP_URL="https://timothychristian23.github.io/ai-study-planner"
 node scripts/supabase-smoke.mjs
 ```
 
-The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, and reaches the deployed Edge Functions through validation paths that do not call OpenAI. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set.
+For authenticated RLS CRUD coverage, create a dedicated Supabase test user and add:
+
+```powershell
+$env:SUPABASE_SMOKE_EMAIL="smoke-user@example.com"
+$env:SUPABASE_SMOKE_PASSWORD="dedicated-smoke-user-password"
+node scripts/supabase-smoke.mjs
+```
+
+The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, reaches deployed Edge Functions through validation paths that do not call OpenAI, and optionally signs in as the smoke user to create, read, update, and clean up an isolated temporary course with child rows. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set; add `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` secrets to enable the authenticated CRUD pass.
 
 ## Product Goals
 
