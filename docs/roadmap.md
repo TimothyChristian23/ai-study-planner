@@ -48,6 +48,7 @@
 - [x] Add cloud conflict resolution actions
 - [x] Add signed download and reprocess controls for stored files
 - [x] Add cloud material indexing status and retry metadata
+- [x] Add deployment-time Supabase smoke tests
 
 ## Phase 3: AI Study Engine
 

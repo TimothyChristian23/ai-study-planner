@@ -29,6 +29,7 @@ This document tracks the path from the deployed static prototype to a production
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
+- `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
 
 ## Setup Steps
 
@@ -64,10 +65,19 @@ This document tracks the path from the deployed static prototype to a production
    supabase functions deploy generate-quiz
    ```
 
+9. Run deployment smoke checks:
+
+   ```powershell
+   $env:SUPABASE_URL="https://your-project-ref.supabase.co"
+   $env:SUPABASE_ANON_KEY="your-supabase-anon-or-publishable-key"
+   $env:AI_STUDY_APP_URL="https://timothychristian23.github.io/ai-study-planner"
+   node scripts/supabase-smoke.mjs
+   ```
+
 ## Next Implementation Steps
 
 1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add deployment-time Supabase smoke tests for migrations and Edge Functions.
+2. Add a dedicated authenticated test user flow for optional end-to-end Supabase smoke checks.
 
 ## Security Notes
 

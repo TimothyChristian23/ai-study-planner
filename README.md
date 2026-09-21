@@ -77,6 +77,19 @@ node scripts/dev-server.mjs
 
 You can also open `index.html` directly in a browser for the non-PDF parts of the prototype.
 
+## Deployment Smoke Tests
+
+After applying Supabase migrations and deploying Edge Functions, run the non-destructive smoke checks:
+
+```powershell
+$env:SUPABASE_URL="https://your-project-ref.supabase.co"
+$env:SUPABASE_ANON_KEY="your-supabase-anon-or-publishable-key"
+$env:AI_STUDY_APP_URL="https://timothychristian23.github.io/ai-study-planner"
+node scripts/supabase-smoke.mjs
+```
+
+The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, and reaches the deployed Edge Functions through validation paths that do not call OpenAI. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set.
+
 ## Product Goals
 
 - Help students convert messy course materials into a practical plan
