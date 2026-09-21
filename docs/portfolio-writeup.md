@@ -33,6 +33,12 @@ The app gives students one local planning surface where they can upload course m
 
 The first version is intentionally dependency-free: static HTML, CSS, and JavaScript with `localStorage` persistence. PDF parsing uses PDF.js from a CDN when served from the local static server. The retrieval prototype scores indexed passages with local keyword/topic matching, which keeps the demo understandable while mapping cleanly to a future embedding-based RAG system.
 
+The production foundation extends the static prototype with Supabase Auth, row-level security, private Storage uploads, Edge Functions, vector-ready material chunks, OpenAI-backed Q&A and quiz generation, durable indexing jobs, deployment smoke tests, and an operations monitor for failed or stalled indexing work.
+
+## Production Validation
+
+The final production-backed validation should be recorded in `production-validation.md` after migrations, Edge Functions, worker scheduling, and smoke tests are run against the live Supabase project. Keep secrets out of the report and capture only outcomes, blockers, and release notes.
+
 ## Product Decisions
 
 - Keep source citations visible so answers feel grounded rather than magical.
@@ -42,4 +48,4 @@ The first version is intentionally dependency-free: static HTML, CSS, and JavaSc
 
 ## Future Build
 
-The natural MVP upgrade is a full-stack version with authentication, durable course storage, file object storage, extracted material chunks, embeddings, and AI-generated answers over retrieved chunks. The static prototype already models the main entities and user workflows needed for that build.
+The next product step is tightening adaptive learning across cloud quiz history, topic progress, and generated schedules. The production foundation already has the main backend pieces for authentication, durable course storage, file object storage, extracted material chunks, embeddings, and AI-generated answers over retrieved chunks.

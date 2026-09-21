@@ -38,6 +38,7 @@ This document tracks the path from the deployed static prototype to a production
 - Optional seeded AI fixture smoke checks for deployed material Q&A and quiz generation over temporary vector chunks
 - `docs/deployment-smoke-setup.md` for GitHub secrets, variables, Supabase setup, smoke-test modes, result interpretation, and cleanup notes
 - `docs/production-hardening.md` for domain, auth redirect, monitoring, worker scheduling, rollback, and release checklist coverage
+- `docs/production-validation.md` for recording final live smoke, monitor, and manual user-flow results without secrets
 
 ## Setup Steps
 
@@ -115,7 +116,7 @@ This document tracks the path from the deployed static prototype to a production
 ## Next Implementation Steps
 
 1. Run the full production smoke suite and indexing monitor against the real Supabase project after the latest migrations and functions are deployed.
-2. Add a private scheduled alert around `scripts/index-job-monitor.mjs` if the project needs ongoing uptime monitoring.
+2. Fill out `docs/production-validation.md` with the live deployment results and any release blockers.
 
 ## Security Notes
 

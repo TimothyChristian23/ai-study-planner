@@ -56,6 +56,7 @@
 - [x] Document deployment secrets and smoke-test setup
 - [x] Add production hardening and rollback runbook
 - [x] Add indexing operations monitor for failed and stalled jobs
+- [x] Add production validation report template
 
 ## Phase 3: AI Study Engine
 
