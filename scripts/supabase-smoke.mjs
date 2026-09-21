@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const MATERIAL_STORAGE_BUCKET = "course-materials";
+const SMOKE_QA_QUESTION = "What should I review for breadth first search?";
+const SMOKE_QUIZ_TOPIC = "Graph traversal";
 const root = resolve(import.meta.dirname, "..");
 
 const tableChecks = [
@@ -116,6 +118,10 @@ function cleanBaseUrl(value) {
 
 function isJwt(value) {
   return String(value || "").split(".").length === 3;
+}
+
+function isEnabled(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
 function truncate(value, maxLength = 600) {
@@ -416,6 +422,67 @@ async function storageRequest({ supabaseUrl, supabaseAnonKey, authToken = "", pa
   return { response, data };
 }
 
+async function invokeEdgeFunction({ supabaseUrl, supabaseAnonKey, authToken, name, body }) {
+  const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/${name}`, {
+    method: "POST",
+    headers: buildHeaders({
+      supabaseAnonKey,
+      authToken,
+      includeJson: true,
+    }),
+    body: JSON.stringify(body),
+  });
+  const data = await readResponseBody(response);
+
+  return { response, data };
+}
+
+async function createOpenAiEmbeddings(inputs) {
+  const apiKey = process.env.OPENAI_API_KEY || "";
+
+  if (!apiKey) {
+    fail("AI fixture embeddings", "Set OPENAI_API_KEY when SUPABASE_SMOKE_RUN_AI is enabled.");
+    return null;
+  }
+
+  const response = await fetchWithTimeout("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
+      input: inputs,
+      encoding_format: "float",
+    }),
+  });
+  const body = await readResponseBody(response);
+
+  if (!response.ok) {
+    fail("AI fixture embeddings", `Received ${response.status}: ${truncate(JSON.stringify(body))}`);
+    return null;
+  }
+
+  const embeddings = [...(body.data || [])]
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.embedding);
+
+  if (embeddings.length !== inputs.length || embeddings.some((embedding) => !Array.isArray(embedding))) {
+    fail("AI fixture embeddings", "OpenAI did not return an embedding for every fixture input.");
+    return null;
+  }
+
+  if (embeddings.some((embedding) => embedding.length !== 1536)) {
+    fail("AI fixture embeddings", "Smoke fixture requires 1536-dimension embeddings. Use text-embedding-3-small.");
+    return null;
+  }
+
+  pass("AI fixture embeddings", `Created ${embeddings.length} fixture embeddings.`);
+
+  return embeddings;
+}
+
 async function deleteSmokeStorageObject({ supabaseUrl, supabaseAnonKey, authToken, objectPath }) {
   const deleteResult = await storageRequest({
     supabaseUrl,
@@ -530,6 +597,103 @@ async function checkAuthenticatedStorage({ supabaseUrl, supabaseAnonKey, session
       }
     }
   }
+}
+
+async function checkAiCloudFixture({ supabaseUrl, supabaseAnonKey, session, courseId, materialId, clientId }) {
+  if (!isEnabled(process.env.SUPABASE_SMOKE_RUN_AI)) {
+    warn(
+      "AI cloud fixture",
+      "Set SUPABASE_SMOKE_RUN_AI=1 and OPENAI_API_KEY to run material Q&A and quiz generation smoke checks.",
+    );
+    return;
+  }
+
+  const embeddings = await createOpenAiEmbeddings([
+    SMOKE_QA_QUESTION,
+    `Generate active recall quiz questions about ${SMOKE_QUIZ_TOPIC}.`,
+  ]);
+
+  if (!embeddings) {
+    return;
+  }
+
+  const chunkRows = [
+    {
+      material_id: materialId,
+      course_id: courseId,
+      chunk_index: 0,
+      content:
+        "Breadth first search uses a queue to visit graph neighbors layer by layer. Review queue order, visited sets, and shortest path behavior in unweighted graphs.",
+      topic: SMOKE_QUIZ_TOPIC,
+      embedding: embeddings[0],
+    },
+    {
+      material_id: materialId,
+      course_id: courseId,
+      chunk_index: 1,
+      content:
+        "Depth first search uses recursion or a stack to explore one graph path before backtracking. Compare DFS traversal order with breadth first search.",
+      topic: SMOKE_QUIZ_TOPIC,
+      embedding: embeddings[1],
+    },
+  ];
+  const { response: chunkResponse, data: chunkData } = await restRequest({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken: session.accessToken,
+    table: "material_chunks",
+    query: "select=id,chunk_index,topic",
+    method: "POST",
+    body: chunkRows,
+    prefer: "return=representation",
+  });
+
+  if (!chunkResponse.ok || !Array.isArray(chunkData) || chunkData.length !== chunkRows.length) {
+    fail("AI fixture chunk seed", `Received ${chunkResponse.status}: ${truncate(JSON.stringify(chunkData))}`);
+    return;
+  }
+
+  pass("AI fixture chunk seed", `Inserted ${chunkData.length} vector chunks.`);
+
+  const qaResult = await invokeEdgeFunction({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken: session.accessToken,
+    name: "ask-materials",
+    body: {
+      courseId,
+      question: SMOKE_QA_QUESTION,
+      questionClientId: `${clientId}-ai-question`,
+      askedAt: new Date().toISOString(),
+    },
+  });
+
+  if (!qaResult.response.ok || !qaResult.data?.answer || !Array.isArray(qaResult.data?.citations) || !qaResult.data.citations.length) {
+    fail("AI fixture material Q&A", `Received ${qaResult.response.status}: ${truncate(JSON.stringify(qaResult.data))}`);
+    return;
+  }
+
+  pass("AI fixture material Q&A", `Answered with ${qaResult.data.citations.length} citation(s).`);
+
+  const quizResult = await invokeEdgeFunction({
+    supabaseUrl,
+    supabaseAnonKey,
+    authToken: session.accessToken,
+    name: "generate-quiz",
+    body: {
+      courseId,
+      topic: SMOKE_QUIZ_TOPIC,
+      count: 1,
+    },
+  });
+  const quizItems = Array.isArray(quizResult.data?.quizItems) ? quizResult.data.quizItems : [];
+
+  if (!quizResult.response.ok || !quizItems[0]?.question || !quizItems[0]?.answer) {
+    fail("AI fixture quiz generation", `Received ${quizResult.response.status}: ${truncate(JSON.stringify(quizResult.data))}`);
+    return;
+  }
+
+  pass("AI fixture quiz generation", "Generated a cloud quiz card from seeded chunks.");
 }
 
 async function checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session }) {
@@ -679,6 +843,15 @@ async function checkAuthenticatedCrud({ supabaseUrl, supabaseAnonKey, session })
       supabaseUrl,
       supabaseAnonKey,
       session,
+      clientId,
+    });
+
+    await checkAiCloudFixture({
+      supabaseUrl,
+      supabaseAnonKey,
+      session,
+      courseId,
+      materialId: materialResult.row.id,
       clientId,
     });
 

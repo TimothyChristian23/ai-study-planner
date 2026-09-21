@@ -32,6 +32,7 @@ This document tracks the path from the deployed static prototype to a production
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
 - Authenticated storage smoke checks for private `course-materials` upload, download, signed URL, verification, and cleanup
+- Optional seeded AI fixture smoke checks for deployed material Q&A and quiz generation over temporary vector chunks
 
 ## Setup Steps
 
@@ -84,10 +85,18 @@ This document tracks the path from the deployed static prototype to a production
    node scripts/supabase-smoke.mjs
    ```
 
+   Optional AI fixture pass:
+
+   ```powershell
+   $env:SUPABASE_SMOKE_RUN_AI="1"
+   $env:OPENAI_API_KEY="sk-proj-your-openai-key"
+   node scripts/supabase-smoke.mjs
+   ```
+
 ## Next Implementation Steps
 
 1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add a small seeded end-to-end cloud fixture for quiz generation and material Q&A smoke checks.
+2. Add a deployment note for configuring GitHub secrets and smoke-test variables.
 
 ## Security Notes
 

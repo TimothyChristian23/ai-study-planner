@@ -96,7 +96,15 @@ $env:SUPABASE_SMOKE_PASSWORD="dedicated-smoke-user-password"
 node scripts/supabase-smoke.mjs
 ```
 
-The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, reaches deployed Edge Functions through validation paths that do not call OpenAI, and optionally signs in as the smoke user to create, read, update, and clean up an isolated temporary course with child rows. The authenticated pass also uploads, downloads, signs, verifies, and deletes a tiny file in the private `course-materials` bucket. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set; add `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` secrets to enable the authenticated CRUD and Storage pass.
+To run the optional AI fixture pass against deployed `ask-materials` and `generate-quiz`, also set:
+
+```powershell
+$env:SUPABASE_SMOKE_RUN_AI="1"
+$env:OPENAI_API_KEY="sk-proj-your-openai-key"
+node scripts/supabase-smoke.mjs
+```
+
+The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, reaches deployed Edge Functions through validation paths that do not call OpenAI, and optionally signs in as the smoke user to create, read, update, and clean up an isolated temporary course with child rows. The authenticated pass also uploads, downloads, signs, verifies, and deletes a tiny file in the private `course-materials` bucket. The opt-in AI fixture seeds temporary vector chunks, calls deployed material Q&A and quiz generation, then cleans up through the same course cascade. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set; add `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` secrets to enable the authenticated CRUD and Storage pass, and set `SUPABASE_SMOKE_RUN_AI` plus `OPENAI_API_KEY` to enable the AI fixture.
 
 ## Product Goals
 
