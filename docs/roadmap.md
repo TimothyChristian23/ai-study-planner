@@ -48,6 +48,7 @@
 - [x] Add cloud conflict resolution actions
 - [x] Add signed download and reprocess controls for stored files
 - [x] Add cloud material indexing status and retry metadata
+- [x] Add durable material indexing jobs and worker retry endpoint
 - [x] Add deployment-time Supabase smoke tests
 - [x] Add authenticated RLS CRUD smoke checks
 - [x] Add authenticated storage smoke checks

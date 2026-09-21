@@ -25,7 +25,9 @@ This document tracks the path from the deployed static prototype to a production
 - Signed-in Supabase Storage uploads to the private `course-materials` bucket, with `storage_path` saved on material rows
 - Signed download and reprocess controls for cloud-stored course files
 - Material indexing status fields for queued, running, indexed, and failed states, with retry attempt metadata
-- `supabase/functions/index-material` for downloading stored files, extracting PDF/text content, chunking it, embedding chunks with OpenAI, and writing `material_chunks`
+- `material_index_jobs` plus `claim_material_index_jobs` for durable indexing work, active-job dedupe, and retryable stale job claims
+- `supabase/functions/index-material` for authenticated manual indexing that enqueues a durable job and processes it immediately when runtime allows
+- `supabase/functions/process-index-jobs` for signed-in or worker-secret job processing across queued and stale indexing jobs
 - The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
@@ -59,6 +61,8 @@ This document tracks the path from the deployed static prototype to a production
    supabase secrets set OPENAI_API_KEY=sk-proj-your-key
    supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
    supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
+   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
    ```
 
 8. Deploy the Edge Functions:
@@ -66,10 +70,20 @@ This document tracks the path from the deployed static prototype to a production
    ```powershell
    supabase functions deploy ask-materials
    supabase functions deploy index-material
+   supabase functions deploy process-index-jobs
    supabase functions deploy generate-quiz
    ```
 
-9. Run deployment smoke checks:
+9. Schedule indexing worker retries with your preferred scheduler, cron service, or Supabase-supported scheduled runtime:
+
+   ```powershell
+   curl -X POST "https://your-project-ref.supabase.co/functions/v1/process-index-jobs" `
+     -H "Content-Type: application/json" `
+     -H "x-index-worker-secret: replace-with-a-long-random-secret" `
+     -d "{\"limit\":3}"
+   ```
+
+10. Run deployment smoke checks:
 
    ```powershell
    $env:SUPABASE_URL="https://your-project-ref.supabase.co"
@@ -96,8 +110,8 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add production deployment hardening notes for domain, auth redirects, monitoring, and rollback.
+1. Add production deployment hardening notes for domain, auth redirects, monitoring, worker scheduling, and rollback.
+2. Add operational dashboards or alerts for failed indexing jobs, Edge Function errors, and storage upload failures.
 
 ## Security Notes
 

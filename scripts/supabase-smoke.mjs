@@ -33,6 +33,21 @@ const tableChecks = [
     columns: ["id", "material_id", "course_id", "chunk_index", "content", "topic", "embedding"],
   },
   {
+    table: "material_index_jobs",
+    columns: [
+      "id",
+      "course_id",
+      "material_id",
+      "status",
+      "requested_by",
+      "attempts",
+      "max_attempts",
+      "run_after",
+      "locked_at",
+      "finished_at",
+    ],
+  },
+  {
     table: "deadlines",
     columns: ["id", "client_id", "course_id", "title", "type", "due_date", "topic", "completed", "updated_at"],
   },
@@ -89,6 +104,12 @@ const functionChecks = [
     body: {},
     acceptedValidationStatuses: [400, 401],
     expectedError: "materialClientId or materialId is required",
+  },
+  {
+    name: "process-index-jobs",
+    body: { limit: 0 },
+    acceptedValidationStatuses: [400, 401],
+    expectedError: "limit must be between 1 and 5",
   },
   {
     name: "generate-quiz",

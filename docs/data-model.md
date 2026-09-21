@@ -183,6 +183,26 @@ This document captures the local data shape used by the static prototype and the
 - `source_page`
 - `created_at`
 
+### material_index_jobs
+
+- `id`
+- `course_id`
+- `material_id`
+- `user_id`
+- `status`
+- `requested_by`
+- `priority`
+- `attempts`
+- `max_attempts`
+- `chunk_count`
+- `error`
+- `run_after`
+- `locked_at`
+- `started_at`
+- `finished_at`
+- `created_at`
+- `updated_at`
+
 ### answer_citations
 
 - `id`
@@ -278,7 +298,8 @@ This document captures the local data shape used by the static prototype and the
 - Material search uses local indexed text and file metadata until server-side parsing lands; signed-in uploads send raw files to private Supabase Storage.
 - Manual cloud sync uses `client_id` columns so the static frontend can update the same Supabase rows instead of creating duplicates.
 - Signed-in uploads store raw files in the private `course-materials` bucket and save `storage_path` on material records.
-- The `index-material` Edge Function downloads stored PDFs and text-like files, extracts text, writes searchable `material_chunks`, and stores OpenAI embeddings.
+- The `index-material` Edge Function enqueues a durable material indexing job, then downloads stored PDFs and text-like files, extracts text, writes searchable `material_chunks`, and stores OpenAI embeddings when runtime allows.
+- The `process-index-jobs` Edge Function claims queued or stale indexing jobs through `claim_material_index_jobs`, then retries failed/stalled material processing from a signed-in request or worker-secret scheduler.
 - Cloud loading restores planner metadata and history; local source search still uses browser-indexed text until the frontend answer panel is routed through cloud retrieval.
 - Activity trends are derived from `completedSessions` and `quizHistory`; they are not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.

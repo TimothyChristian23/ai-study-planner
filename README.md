@@ -28,7 +28,7 @@ This is a dependency-free static prototype focused on the core product workflow:
 
 Full-stack work is now underway with durable file storage, server-side parsing, embeddings, and AI-generated answers over retrieved material chunks. The static demo still keeps a local-first fallback so the portfolio walkthrough works without credentials.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, server-side material indexing, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, and authenticated Edge Functions that call OpenAI server-side.
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, and authenticated Edge Functions that call OpenAI server-side.
 
 ## Current Prototype
 
@@ -64,7 +64,7 @@ This repo currently includes:
 - Cloud conflict resolution actions for loading cloud, keeping local, or overwriting a changed planner
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
 - Signed download and reprocess controls for cloud-stored course files
-- Server-side material indexing function for stored PDFs and text-like files, including chunking and OpenAI embeddings
+- Server-side material indexing for stored PDFs and text-like files, with durable jobs, retry metadata, chunking, and OpenAI embeddings
 - Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with local retrieval fallback
 - Signed-in quiz generation from indexed cloud material chunks, with local quiz fallback
 - Responsive dashboard layout with mobile-friendly navigation and controls

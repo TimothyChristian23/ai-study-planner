@@ -19,6 +19,8 @@ Use this checklist after creating the Supabase project and before relying on the
    supabase secrets set OPENAI_API_KEY=sk-proj-your-key
    supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
    supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
+   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
    ```
 
 5. Deploy Edge Functions:
@@ -26,10 +28,20 @@ Use this checklist after creating the Supabase project and before relying on the
    ```powershell
    supabase functions deploy ask-materials
    supabase functions deploy index-material
+   supabase functions deploy process-index-jobs
    supabase functions deploy generate-quiz
    ```
 
-6. Create a dedicated smoke-test user in Supabase Auth.
+6. Schedule the indexing worker with a cron service or Supabase-supported scheduled runtime:
+
+   ```powershell
+   curl -X POST "https://your-project-ref.supabase.co/functions/v1/process-index-jobs" `
+     -H "Content-Type: application/json" `
+     -H "x-index-worker-secret: replace-with-a-long-random-secret" `
+     -d "{\"limit\":3}"
+   ```
+
+7. Create a dedicated smoke-test user in Supabase Auth.
 
 Use a test-only email such as `smoke-user@example.com`. Do not use a personal account, a real student account, or a service-role key for browser or smoke-test configuration.
 

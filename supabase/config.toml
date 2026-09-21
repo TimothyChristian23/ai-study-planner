@@ -6,5 +6,8 @@ verify_jwt = true
 [functions.index-material]
 verify_jwt = true
 
+[functions.process-index-jobs]
+verify_jwt = false
+
 [functions.generate-quiz]
 verify_jwt = true
