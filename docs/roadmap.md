@@ -52,6 +52,7 @@
 - [x] Add authenticated RLS CRUD smoke checks
 - [x] Add authenticated storage smoke checks
 - [x] Add optional AI fixture smoke checks for Q&A and quiz generation
+- [x] Document deployment secrets and smoke-test setup
 
 ## Phase 3: AI Study Engine
 

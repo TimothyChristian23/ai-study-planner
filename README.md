@@ -79,6 +79,8 @@ You can also open `index.html` directly in a browser for the non-PDF parts of th
 
 ## Deployment Smoke Tests
 
+For the full deployment checklist, repository secrets, GitHub variables, and smoke-test interpretation guide, see `docs/deployment-smoke-setup.md`.
+
 After applying Supabase migrations and deploying Edge Functions, run the non-destructive smoke checks:
 
 ```powershell
@@ -124,4 +126,4 @@ The smoke runner validates deployed table columns with `limit=0`, checks the sta
 
 ## Roadmap
 
-See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, `docs/production-upgrade.md` for the production migration plan, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.
+See `docs/roadmap.md` for a phased build plan, `docs/data-model.md` for the MVP data model, `docs/production-upgrade.md` for the production migration plan, `docs/deployment-smoke-setup.md` for deployment smoke-test setup, and `docs/portfolio-writeup.md` for the portfolio case study with screenshots.

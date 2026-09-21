@@ -33,6 +33,7 @@ This document tracks the path from the deployed static prototype to a production
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
 - Authenticated storage smoke checks for private `course-materials` upload, download, signed URL, verification, and cleanup
 - Optional seeded AI fixture smoke checks for deployed material Q&A and quiz generation over temporary vector chunks
+- `docs/deployment-smoke-setup.md` for GitHub secrets, variables, Supabase setup, smoke-test modes, result interpretation, and cleanup notes
 
 ## Setup Steps
 
@@ -96,7 +97,7 @@ This document tracks the path from the deployed static prototype to a production
 ## Next Implementation Steps
 
 1. Move long-running document indexing into a durable background job queue once the Supabase project has a worker/runtime for scheduled retries.
-2. Add a deployment note for configuring GitHub secrets and smoke-test variables.
+2. Add production deployment hardening notes for domain, auth redirects, monitoring, and rollback.
 
 ## Security Notes
 
