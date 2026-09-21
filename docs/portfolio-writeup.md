@@ -22,6 +22,7 @@ The app gives students one local planning surface where they can upload course m
 - Browser PDF/text indexing for source search, quiz generation, and grounded answers
 - Deadline tracking plus local deadline suggestions from syllabus or assignment text
 - Adaptive schedule generation based on weak topics, due dates, preferred study days, and start time
+- Topic priority scoring that raises low-confidence, missed, review-due, and deadline-sensitive topics
 - Focus timer with completion notes that feed back into topic confidence
 - Source-backed quiz cards, quiz history, accuracy, and streak tracking
 - Spaced-review queue and exam readiness score
@@ -43,6 +44,7 @@ The final production-backed validation should be recorded in `production-validat
 
 - Keep source citations visible so answers feel grounded rather than magical.
 - Treat weak-topic confidence as a shared signal across quizzes, sessions, readiness, and schedule priority.
+- Blend quiz misses, due reviews, and deadline pressure into schedule priority so the plan responds to student behavior.
 - Include backup and sample-demo workflows so reviewers can reset or move a portfolio state quickly.
 - Export reports and calendars because students need artifacts they can use outside the app.
 

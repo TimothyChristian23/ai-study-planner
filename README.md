@@ -49,6 +49,7 @@ This repo currently includes:
 - 7-day activity trend for study minutes and quiz attempts
 - Exam readiness score with risk signals and next-step recommendations
 - Spaced-review queue that schedules topics by confidence and review recency
+- Adaptive schedule priority that weighs low confidence, quiz misses, due reviews, and deadline pressure
 - Downloadable `.ics` calendar export for generated study sessions
 - Downloadable Markdown study report with plan, deadlines, weak topics, reviews, and activity
 - JSON backup/import controls plus a downloadable seeded sample backup

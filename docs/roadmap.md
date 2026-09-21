@@ -69,8 +69,8 @@
 
 ## Phase 4: Adaptive Learning
 
-- Track quiz performance by topic
-- Prioritize weak topics in new schedules
+- [x] Track quiz performance by topic
+- [x] Prioritize weak topics in new schedules
 - Add spaced repetition review sessions
 - Show progress trends by course and exam
 

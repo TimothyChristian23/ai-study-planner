@@ -2384,6 +2384,107 @@ function getTopicStats() {
     .sort((a, b) => a.score - b.score || b.count - a.count || a.name.localeCompare(b.name));
 }
 
+function getTopicDeadlinePressure(topicName, openDeadlines = getOpenDeadlines()) {
+  return openDeadlines
+    .filter((deadline) => (deadline.topic || "General review") === topicName)
+    .reduce((highestPressure, deadline) => {
+      const daysLeft = getDaysUntil(deadline.dueDate);
+      const typePressure = deadline.type === "Exam" || deadline.type === "Quiz" ? 8 : deadline.type === "Project" ? 4 : 0;
+      let pressure = 0;
+
+      if (daysLeft === null) {
+        pressure = 0;
+      } else if (daysLeft < 0) {
+        pressure = 36;
+      } else if (daysLeft <= 2) {
+        pressure = 32;
+      } else if (daysLeft <= 7) {
+        pressure = 22;
+      } else if (daysLeft <= 14) {
+        pressure = 12;
+      } else if (daysLeft <= 30) {
+        pressure = 6;
+      }
+
+      return Math.max(highestPressure, pressure + typePressure);
+    }, 0);
+}
+
+function getTopicReviewPressure(topic) {
+  const progress = ensureTopicProgress(topic.name, topic.count);
+  const lastReviewed = progress.lastReviewedAt ? new Date(progress.lastReviewedAt) : null;
+
+  if (!lastReviewed || Number.isNaN(lastReviewed.getTime())) {
+    return topic.score < 70 ? 12 : 6;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  lastReviewed.setHours(0, 0, 0, 0);
+
+  const daysSinceReview = Math.floor((today - lastReviewed) / 86400000);
+  const overdueDays = daysSinceReview - getReviewIntervalDays(topic);
+
+  if (overdueDays >= 0) {
+    return clamp(12 + overdueDays * 4, 12, 32);
+  }
+
+  return overdueDays >= -1 ? 6 : 0;
+}
+
+function getAdaptiveTopicSignals(topic, openDeadlines = getOpenDeadlines()) {
+  const missRate = topic.attempts ? topic.misses / topic.attempts : 0;
+  const missPressure = Math.min(30, topic.misses * 6 + missRate * 18);
+  const reviewPressure = getTopicReviewPressure(topic);
+  const deadlinePressure = getTopicDeadlinePressure(topic.name, openDeadlines);
+  const confidencePressure = 100 - topic.score;
+  const studyRelief = Math.min(10, (topic.studySessions || 0) * 1.5);
+  const adaptivePriority = Math.round(
+    confidencePressure + missPressure + reviewPressure + deadlinePressure + topic.count * 2 - studyRelief,
+  );
+  const signals = [];
+
+  if (topic.score < 60) {
+    signals.push("low confidence");
+  }
+
+  if (topic.misses) {
+    signals.push(`${topic.misses}/${topic.attempts} quiz misses`);
+  }
+
+  if (reviewPressure >= 12) {
+    signals.push("review due");
+  }
+
+  if (deadlinePressure >= 18) {
+    signals.push("deadline pressure");
+  }
+
+  return {
+    ...topic,
+    adaptivePriority,
+    adaptiveLabel: adaptivePriority >= 85 ? "Critical" : adaptivePriority >= 60 ? "High" : topic.priority,
+    signals,
+  };
+}
+
+function getAdaptiveTopics(topics = getTopicStats(), openDeadlines = getOpenDeadlines()) {
+  return topics
+    .map((topic) => getAdaptiveTopicSignals(topic, openDeadlines))
+    .sort((a, b) => b.adaptivePriority - a.adaptivePriority || a.score - b.score || a.name.localeCompare(b.name));
+}
+
+function getAdaptiveTopicQueue(topics = getTopicStats(), openDeadlines = getOpenDeadlines()) {
+  const adaptiveTopics = getAdaptiveTopics(topics, openDeadlines);
+  const weightedTopics = adaptiveTopics.flatMap((topic) => {
+    const repeatCount = topic.adaptivePriority >= 85 ? 3 : topic.adaptivePriority >= 60 ? 2 : 1;
+
+    return Array.from({ length: repeatCount }, () => topic);
+  });
+
+  return weightedTopics.length ? weightedTopics : adaptiveTopics;
+}
+
 function findMaterialForTopic(topic) {
   return (
     state.materials.find((material) => material.topics.includes(topic) && material.text) ||
@@ -2893,14 +2994,15 @@ async function materialFromFileWithStorage(file) {
 
 function buildSchedule() {
   const minutes = Number(state.course.dailyMinutes) || 45;
-  const topics = getTopicStats();
   const openDeadlines = getOpenDeadlines();
-  const sessionCount = Math.min(7, Math.max(3, topics.length + Math.min(openDeadlines.length, 3)));
+  const adaptiveTopics = getAdaptiveTopics(getTopicStats(), openDeadlines);
+  const topicQueue = getAdaptiveTopicQueue(adaptiveTopics, openDeadlines);
+  const sessionCount = Math.min(7, Math.max(3, adaptiveTopics.length + Math.min(openDeadlines.length, 3)));
 
   return Array.from({ length: sessionCount }, (_, index) => {
     const deadline = openDeadlines[index % Math.max(openDeadlines.length, 1)];
     const shouldPlanDeadline =
-      Boolean(deadline) && (index % 2 === 0 || getDaysUntil(deadline.dueDate) <= 7 || topics.length === 1);
+      Boolean(deadline) && (index % 2 === 0 || getDaysUntil(deadline.dueDate) <= 7 || adaptiveTopics.length === 1);
 
     if (shouldPlanDeadline) {
       const daysLeft = getDaysUntil(deadline.dueDate);
@@ -2920,15 +3022,17 @@ function buildSchedule() {
       });
     }
 
-    const topic = topics[index % topics.length];
+    const topic = topicQueue[index % topicQueue.length];
     const material = findMaterialForTopic(topic.name);
     const sessionDate = getStudyDateForIndex(index);
     const isFinalReview = Boolean(openDeadlines.length) && index === sessionCount - 1;
-    const verb = topic.score < 48 ? "Repair weak spot" : index % 2 === 0 ? "Active recall" : "Review source";
+    const verb =
+      topic.adaptivePriority >= 85 ? "Priority drill" : topic.score < 48 ? "Repair weak spot" : index % 2 === 0 ? "Active recall" : "Review source";
     const task = isFinalReview
       ? `Mixed review before ${openDeadlines[0].title}`
       : `${verb}: ${topic.name}`;
     const source = material ? material.name : "uploaded materials";
+    const signalText = topic.signals?.length ? ` - ${topic.signals.slice(0, 2).join(", ")}` : "";
 
     return withSessionId({
       day: formatSessionDate(sessionDate),
@@ -2936,7 +3040,7 @@ function buildSchedule() {
       task,
       time: `${Math.max(20, minutes - (index % 3) * 5)} min`,
       focus: topic.name,
-      reason: `${topic.score}% confidence - ${source}`,
+      reason: `${topic.score}% confidence${signalText} - ${source}`,
     });
   });
 }
@@ -3120,7 +3224,7 @@ function completeFocusSession() {
 }
 
 function buildTopics() {
-  return getTopicStats().slice(0, 5);
+  return getAdaptiveTopics(getTopicStats(), getOpenDeadlines()).slice(0, 5);
 }
 
 function normalizeWhitespace(value) {
@@ -3513,17 +3617,24 @@ function renderTopics() {
   const topics = buildTopics();
 
   list.innerHTML = topics
-    .map(
-      (topic) => `
+    .map((topic) => {
+      const meta = [
+        topic.adaptiveLabel || topic.priority,
+        `${topic.attempts} quiz`,
+        `${topic.studySessions} sessions`,
+        ...(topic.signals?.slice(0, 1) || []),
+      ].join(" - ");
+
+      return `
         <div class="topic-item">
           <div>
             <strong>${escapeHTML(topic.name)}</strong>
-            <span>${escapeHTML(topic.priority)} - ${topic.attempts} quiz - ${topic.studySessions} sessions</span>
+            <span>${escapeHTML(meta)}</span>
           </div>
           <meter min="0" max="100" value="${topic.score}"></meter>
         </div>
-      `,
-    )
+      `;
+    })
     .join("");
 
   document.querySelector("#weakTopicCount").textContent = topics.length;
