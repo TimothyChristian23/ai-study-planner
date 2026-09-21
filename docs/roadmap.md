@@ -55,6 +55,7 @@
 - [x] Add optional AI fixture smoke checks for Q&A and quiz generation
 - [x] Document deployment secrets and smoke-test setup
 - [x] Add production hardening and rollback runbook
+- [x] Add indexing operations monitor for failed and stalled jobs
 
 ## Phase 3: AI Study Engine
 

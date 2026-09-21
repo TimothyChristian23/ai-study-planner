@@ -32,6 +32,7 @@ This document tracks the path from the deployed static prototype to a production
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
+- `scripts/index-job-monitor.mjs` for service-role operational checks against failed, stale running, and overdue queued indexing jobs
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
 - Authenticated storage smoke checks for private `course-materials` upload, download, signed URL, verification, and cleanup
 - Optional seeded AI fixture smoke checks for deployed material Q&A and quiz generation over temporary vector chunks
@@ -113,8 +114,8 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Next Implementation Steps
 
-1. Add operational dashboards or alerts for failed indexing jobs, Edge Function errors, and storage upload failures.
-2. Run the full production smoke suite against the real Supabase project after the latest migrations and functions are deployed.
+1. Run the full production smoke suite and indexing monitor against the real Supabase project after the latest migrations and functions are deployed.
+2. Add a private scheduled alert around `scripts/index-job-monitor.mjs` if the project needs ongoing uptime monitoring.
 
 ## Security Notes
 

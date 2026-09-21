@@ -71,6 +71,25 @@ Check these after every deploy and at least once during a public demo period:
 - GitHub Actions smoke-test results
 - Failed or stalled indexing jobs
 
+Run the indexing operations monitor with a server-side key:
+
+```powershell
+$env:SUPABASE_URL="https://your-project-ref.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+node scripts/index-job-monitor.mjs
+```
+
+Optional thresholds:
+
+```powershell
+$env:INDEX_MONITOR_FAILED_THRESHOLD="0"
+$env:INDEX_MONITOR_STALE_RUNNING_THRESHOLD="0"
+$env:INDEX_MONITOR_OVERDUE_QUEUED_THRESHOLD="20"
+$env:INDEX_MONITOR_STALE_MINUTES="10"
+$env:INDEX_MONITOR_DETAIL_LIMIT="10"
+node scripts/index-job-monitor.mjs
+```
+
 Useful SQL checks:
 
 ```sql
