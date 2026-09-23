@@ -907,6 +907,49 @@ function getCloudErrorMessage(error) {
   return error?.message ? `Cloud sync error: ${error.message}` : "Cloud sync failed. Try again after setup is complete.";
 }
 
+function getErrorText(error) {
+  if (!error) {
+    return "";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return [error.message, error.name, error.context?.error, error.details, error.hint]
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function getReadableCloudError(error) {
+  const response = error?.context;
+
+  if (!response || typeof response.clone !== "function") {
+    return error;
+  }
+
+  try {
+    const bodyText = await response.clone().text();
+    const message = [getErrorText(error), bodyText].filter(Boolean).join(": ");
+    const enrichedError = new Error(message || "Cloud function failed.");
+    enrichedError.name = error?.name || "CloudFunctionError";
+
+    return enrichedError;
+  } catch {
+    return error;
+  }
+}
+
+function isAiUnavailableError(error) {
+  return /(credit_balance_exhausted|insufficient_quota|no credits remaining|prepaid credits|OPENAI_API_KEY|Embedding request failed with 429|OpenAI)/i.test(
+    getErrorText(error),
+  );
+}
+
+function getAiFallbackMessage(action = "AI feature") {
+  return `${action} needs API credits. Using local source-backed study tools instead.`;
+}
+
 function canUseCloudStorage() {
   return Boolean(getSupabaseClient() && authSession?.user?.id);
 }
@@ -1458,7 +1501,7 @@ async function indexMaterialInCloud(material) {
     });
 
     if (error) {
-      throw error;
+      throw await getReadableCloudError(error);
     }
 
     const status = data?.status || `Indexed ${data?.chunkCount || 0} chunks`;
@@ -1481,17 +1524,23 @@ async function indexMaterialInCloud(material) {
   } catch (error) {
     console.error(error);
     const message = error?.message || "Could not index this material.";
+    const aiUnavailable = isAiUnavailableError(error);
+    const fallbackMessage = aiUnavailable
+      ? "Cloud AI indexing needs API credits. Local search, local Q&A, and source-backed quiz cards still work from browser-indexed text."
+      : message;
     const currentMaterial = state.materials.find((item) => item.id === material.id) || material;
     updateMaterialIndexState(material.id, {
       status: "Indexing failed",
-      cloudStatus: "Cloud indexing failed",
+      cloudStatus: aiUnavailable ? "Local study mode available" : "Cloud indexing failed",
       indexStatus: "failed",
-      indexError: message,
+      indexError: fallbackMessage,
       indexAttempts: (Number(currentMaterial.indexAttempts) || 0) + 1,
     });
     renderAll();
-    setAuthStatus(message);
-    uploadStatus.textContent = "Cloud indexing failed. Check Supabase function deployment and secrets.";
+    setAuthStatus(fallbackMessage);
+    uploadStatus.textContent = aiUnavailable
+      ? "Cloud AI indexing is unavailable without API credits. Local study mode is still ready."
+      : "Cloud indexing failed. Check Supabase function deployment and secrets.";
     renderAuthPanel();
   }
 }
@@ -1548,7 +1597,7 @@ async function answerFromCloudMaterials(question, historyEntry = {}) {
   });
 
   if (error) {
-    throw error;
+    throw await getReadableCloudError(error);
   }
 
   if (data?.error) {
@@ -1597,13 +1646,18 @@ async function answerStudyQuestion() {
     }
   } catch (error) {
     console.error(error);
-    setAuthStatus(error?.message || "Cloud answer failed; using local materials.");
+    setAuthStatus(
+      isAiUnavailableError(error)
+        ? getAiFallbackMessage("Cloud Q&A")
+        : error?.message || "Cloud answer failed; using local materials.",
+    );
     result = null;
   } finally {
     answerButton.disabled = false;
   }
 
   if (!result) {
+    document.querySelector("#answerConfidence").textContent = "Grounding: local retrieval pending";
     result = answerFromMaterials(question);
   }
 
@@ -1621,13 +1675,44 @@ function getCloudQuizTopic() {
   return reviewTopic || weakTopic || state.course.name || "General review";
 }
 
+function buildLocalQuizFallbackItems(topic = getCloudQuizTopic(), count = 5) {
+  const preferredTopic = String(topic || "").toLowerCase();
+  const localQuestions = buildQuestions()
+    .filter((item) => !item.cloudGenerated)
+    .sort((a, b) => {
+      const aMatches = String(a.topic || "").toLowerCase() === preferredTopic ? 0 : 1;
+      const bMatches = String(b.topic || "").toLowerCase() === preferredTopic ? 0 : 1;
+
+      return aMatches - bMatches;
+    })
+    .slice(0, count);
+
+  return localQuestions.map((item) =>
+    normalizeQuizItem({
+      ...item,
+      id: makeId(),
+      generatedAt: new Date().toISOString(),
+      cloudGenerated: false,
+    }),
+  );
+}
+
 async function generateQuizFromCloud() {
   const client = getSupabaseClient();
   const generateButton = document.querySelector("#generateCloudQuiz");
   const feedback = document.querySelector("#quizFeedback");
+  const topic = getCloudQuizTopic();
 
   if (!client || !authSession?.user?.id) {
-    feedback.textContent = "Sign in and configure Supabase to generate quizzes from indexed cloud materials.";
+    const localItems = buildLocalQuizFallbackItems(topic);
+
+    mergeQuizItems(localItems);
+    quizAnswerVisible = false;
+    state.questionIndex = 0;
+    renderAll();
+    feedback.textContent = localItems.length
+      ? `Generated ${localItems.length} local quiz card${localItems.length === 1 ? "" : "s"} from browser-indexed materials.`
+      : "Upload indexed text or PDF materials to generate local quiz cards.";
     return;
   }
 
@@ -1647,7 +1732,6 @@ async function generateQuizFromCloud() {
       throw new Error("Cloud course was not found. Sync the planner first.");
     }
 
-    const topic = getCloudQuizTopic();
     const { data, error } = await client.functions.invoke("generate-quiz", {
       body: {
         courseId: course.id,
@@ -1657,7 +1741,7 @@ async function generateQuizFromCloud() {
     });
 
     if (error) {
-      throw error;
+      throw await getReadableCloudError(error);
     }
 
     if (data?.error) {
@@ -1677,7 +1761,25 @@ async function generateQuizFromCloud() {
     feedback.textContent = `Generated ${quizItems.length} cloud quiz card${quizItems.length === 1 ? "" : "s"} for ${topic}.`;
   } catch (error) {
     console.error(error);
-    feedback.textContent = error?.message || "Cloud quiz generation failed. Index materials first, then try again.";
+    const localItems = buildLocalQuizFallbackItems(topic);
+
+    if (localItems.length) {
+      mergeQuizItems(localItems);
+      quizAnswerVisible = false;
+      state.questionIndex = 0;
+      renderAll();
+      setAuthStatus(
+        isAiUnavailableError(error)
+          ? getAiFallbackMessage("Cloud quiz generation")
+          : "Cloud quiz generation failed; generated local quiz cards instead.",
+      );
+      feedback.textContent = `Generated ${localItems.length} local quiz card${
+        localItems.length === 1 ? "" : "s"
+      } from browser-indexed materials.`;
+    } else {
+      feedback.textContent =
+        error?.message || "Cloud quiz generation failed. Upload materials with extractable text, then try again.";
+    }
   } finally {
     generateButton.disabled = false;
   }

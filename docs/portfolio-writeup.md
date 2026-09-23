@@ -35,7 +35,7 @@ The app gives students one local planning surface where they can upload course m
 
 The first version is intentionally dependency-free: static HTML, CSS, and JavaScript with `localStorage` persistence. PDF parsing uses PDF.js from a CDN when served from the local static server. The retrieval prototype scores indexed passages with local keyword/topic matching, which keeps the demo understandable while mapping cleanly to a future embedding-based RAG system.
 
-The production foundation extends the static prototype with Supabase Auth, row-level security, private Storage uploads, Edge Functions, vector-ready material chunks, OpenAI-backed Q&A and quiz generation, durable indexing jobs, deployment smoke tests, and an operations monitor for failed or stalled indexing work.
+The production foundation extends the static prototype with Supabase Auth, row-level security, private Storage uploads, Edge Functions, vector-ready material chunks, optional OpenAI-backed Q&A and quiz generation, durable indexing jobs, deployment smoke tests, an operations monitor for failed or stalled indexing work, and local fallbacks when paid API credits are unavailable.
 
 ## Production Validation
 

@@ -8,7 +8,7 @@ This document tracks the path from the deployed static prototype to a production
 - Auth: Supabase Auth
 - Database: Supabase Postgres with row-level security
 - File storage: Supabase Storage bucket for user course materials
-- AI: Supabase Edge Functions calling OpenAI server-side
+- AI: Supabase Edge Functions calling OpenAI server-side, with browser-local study fallbacks when API credits are unavailable
 - Retrieval: extracted material chunks stored in Postgres with vector embeddings
 
 ## Foundation Added
@@ -28,9 +28,10 @@ This document tracks the path from the deployed static prototype to a production
 - `material_index_jobs` plus `claim_material_index_jobs` for durable indexing work, active-job dedupe, and retryable stale job claims
 - `supabase/functions/index-material` for authenticated manual indexing that enqueues a durable job and processes it immediately when runtime allows
 - `supabase/functions/process-index-jobs` for signed-in or worker-secret job processing across queued and stale indexing jobs
-- The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval is unavailable
+- The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval or OpenAI credits are unavailable
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
+- Cloud quiz generation now falls back to source-backed local quiz cards when OpenAI credits are unavailable or cloud retrieval fails
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
 - `scripts/index-job-monitor.mjs` for service-role operational checks against failed, stale running, and overdue queued indexing jobs
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows

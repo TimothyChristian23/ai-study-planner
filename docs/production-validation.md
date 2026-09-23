@@ -60,7 +60,7 @@ Result:
 - Material Q&A: pending until indexing can create embeddings
 - Quiz generation: pending until indexing can create embeddings
 - Cleanup: passed; temporary AI smoke course, jobs, and storage objects were removed
-- Notes: deployed Edge Functions have `OPENAI_API_KEY` and the validation reached OpenAI; indexing failed with `credit_balance_exhausted`, meaning the API organization has no prepaid credits remaining. Add credits in the OpenAI API billing portal, wait a few minutes for the balance to update, then rerun the AI validation.
+- Notes: deployed Edge Functions have `OPENAI_API_KEY` and the validation reached OpenAI; indexing failed with `credit_balance_exhausted`, meaning the API organization has no prepaid credits remaining. The app now degrades to browser-local source-backed Q&A and quiz cards when OpenAI credits are unavailable. Add credits in the OpenAI API billing portal only if you want to rerun the optional cloud AI validation.
 
 ## Index Job Monitor
 
@@ -111,6 +111,6 @@ Result:
 
 - Ready for public portfolio sharing:
 - Blockers:
-- OpenAI API credit balance is exhausted, so deployed AI indexing/Q&A/quiz generation cannot complete until API credits are added.
+- OpenAI API credit balance is exhausted, so deployed cloud AI indexing/Q&A/quiz generation cannot complete until API credits are added. The portfolio app remains usable through local source-backed study fallbacks.
 - Follow-up fixes:
 - Rollback point:

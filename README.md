@@ -26,9 +26,9 @@ https://timothychristian23.github.io/ai-study-planner/
 
 This is a dependency-free static prototype focused on the core product workflow: local material intake, planning, practice, weak-topic tracking, retrieval-style answers, and portfolio-ready exports. It runs in the browser with `localStorage` persistence, a seeded demo state, and a Supabase-auth-ready account panel that stays disabled until configured.
 
-Full-stack work is now underway with durable file storage, server-side parsing, embeddings, and AI-generated answers over retrieved material chunks. The static demo still keeps a local-first fallback so the portfolio walkthrough works without credentials.
+Full-stack work is now underway with durable file storage, server-side parsing, embeddings, and AI-generated answers over retrieved material chunks. The static demo still keeps local-first study tools so the portfolio walkthrough works without credentials or paid API credits.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, and authenticated Edge Functions that call OpenAI server-side.
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, authenticated Edge Functions that can call OpenAI server-side, and browser fallbacks when cloud AI is unavailable.
 
 ## Current Prototype
 
@@ -66,9 +66,9 @@ This repo currently includes:
 - Cloud conflict resolution actions for loading cloud, keeping local, or overwriting a changed planner
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
 - Signed download and reprocess controls for cloud-stored course files
-- Server-side material indexing for stored PDFs and text-like files, with durable jobs, retry metadata, chunking, and OpenAI embeddings
-- Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with local retrieval fallback
-- Signed-in quiz generation from indexed cloud material chunks, with local quiz fallback
+- Server-side material indexing for stored PDFs and text-like files, with durable jobs, retry metadata, chunking, optional OpenAI embeddings, and local study mode when credits are unavailable
+- Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with source-backed local retrieval fallback
+- Signed-in quiz generation from indexed cloud material chunks, with source-backed local quiz fallback
 - Responsive dashboard layout with mobile-friendly navigation and controls
 
 For the most reliable PDF indexing, run a local static server and open the served URL:
