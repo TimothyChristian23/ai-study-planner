@@ -45,7 +45,7 @@ For domain, auth redirect, monitoring, rollback, and release-readiness checks, u
 
 7. Create a dedicated smoke-test user in Supabase Auth.
 
-Use a test-only email such as `smoke-user@example.com`. Do not use a personal account, a real student account, or a service-role key for browser or smoke-test configuration.
+Use a test-only email that you control, such as a plus-address on your own domain. Supabase may reject placeholder domains like `example.com`. Do not use a personal student account, a real student account, or a service-role key for browser or smoke-test configuration.
 
 ## Static App Config
 
@@ -99,8 +99,8 @@ node scripts/supabase-smoke.mjs
 Authenticated RLS and Storage checks:
 
 ```powershell
-$env:SUPABASE_SMOKE_EMAIL="smoke-user@example.com"
-$env:SUPABASE_SMOKE_PASSWORD="dedicated-smoke-user-password"
+$env:SUPABASE_SMOKE_EMAIL="you+ai-study-smoke@your-domain.com"
+$env:SUPABASE_SMOKE_PASSWORD="generated-dedicated-smoke-password"
 node scripts/supabase-smoke.mjs
 ```
 

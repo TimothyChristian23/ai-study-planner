@@ -98,8 +98,8 @@ This document tracks the path from the deployed static prototype to a production
    Optional authenticated RLS pass:
 
    ```powershell
-   $env:SUPABASE_SMOKE_EMAIL="smoke-user@example.com"
-   $env:SUPABASE_SMOKE_PASSWORD="dedicated-smoke-user-password"
+   $env:SUPABASE_SMOKE_EMAIL="you+ai-study-smoke@your-domain.com"
+   $env:SUPABASE_SMOKE_PASSWORD="generated-dedicated-smoke-password"
    node scripts/supabase-smoke.mjs
    ```
 
