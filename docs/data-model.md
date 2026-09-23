@@ -295,6 +295,7 @@ This document captures the local data shape used by the static prototype and the
 - Course availability stores preferred study days as JavaScript day numbers, where `0` is Sunday and `6` is Saturday.
 - Exam readiness is derived from confidence, plan completion, deadline timing, due reviews, and available materials; it is not stored separately.
 - Adaptive schedule priority is derived from `topicProgress`, quiz misses, due spaced reviews, deadline timing, and material/topic frequency; it is recalculated when plans are generated.
+- Generated schedules reserve alternating slots for the highest-priority due or soon spaced reviews so completing those sessions updates `lastReviewedAt`.
 - Suggested deadlines are extracted locally from uploaded material text and kept separate until the student accepts them.
 - Material search uses local indexed text and file metadata until server-side parsing lands; signed-in uploads send raw files to private Supabase Storage.
 - Manual cloud sync uses `client_id` columns so the static frontend can update the same Supabase rows instead of creating duplicates.

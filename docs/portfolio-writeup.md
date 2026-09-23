@@ -25,7 +25,7 @@ The app gives students one local planning surface where they can upload course m
 - Topic priority scoring that raises low-confidence, missed, review-due, and deadline-sensitive topics
 - Focus timer with completion notes that feed back into topic confidence
 - Source-backed quiz cards, quiz history, accuracy, and streak tracking
-- Spaced-review queue and exam readiness score
+- Spaced-review queue with due reviews inserted into generated plans, plus exam readiness scoring
 - Material-grounded answers with citations and recent question history
 - Markdown report export, `.ics` calendar export, JSON backup/import, and seeded sample backup
 - Responsive dashboard layout for desktop and mobile portfolio review

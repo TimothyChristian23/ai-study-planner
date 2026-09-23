@@ -2794,6 +2794,38 @@ function getSpacedReviewItems() {
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue || a.score - b.score);
 }
 
+const reviewStatusPriority = {
+  Due: 0,
+  Soon: 1,
+  Scheduled: 2,
+};
+
+function getPlanReviewItems(openDeadlines = getOpenDeadlines()) {
+  return getSpacedReviewItems()
+    .filter((item) => item.status !== "Scheduled")
+    .map((item) => getAdaptiveTopicSignals(item, openDeadlines))
+    .sort(
+      (a, b) =>
+        (reviewStatusPriority[a.status] ?? 3) - (reviewStatusPriority[b.status] ?? 3) ||
+        a.daysUntilDue - b.daysUntilDue ||
+        b.adaptivePriority - a.adaptivePriority ||
+        a.score - b.score ||
+        a.name.localeCompare(b.name),
+    );
+}
+
+function getReviewDueText(review) {
+  if (review.daysUntilDue <= 0) {
+    return "due now";
+  }
+
+  if (review.daysUntilDue === 1) {
+    return "due tomorrow";
+  }
+
+  return `due in ${review.daysUntilDue} days`;
+}
+
 function getReadinessLabel(score) {
   if (score >= 82) return "Ready";
   if (score >= 66) return "On track";
@@ -2997,9 +3029,32 @@ function buildSchedule() {
   const openDeadlines = getOpenDeadlines();
   const adaptiveTopics = getAdaptiveTopics(getTopicStats(), openDeadlines);
   const topicQueue = getAdaptiveTopicQueue(adaptiveTopics, openDeadlines);
-  const sessionCount = Math.min(7, Math.max(3, adaptiveTopics.length + Math.min(openDeadlines.length, 3)));
+  const reviewItems = getPlanReviewItems(openDeadlines);
+  const reviewSessionCount = Math.min(3, reviewItems.length);
+  const sessionCount = Math.min(
+    7,
+    Math.max(3, adaptiveTopics.length + Math.min(openDeadlines.length, 3), reviewSessionCount * 2 + 1),
+  );
 
   return Array.from({ length: sessionCount }, (_, index) => {
+    const review = index % 2 === 1 ? reviewItems[Math.floor(index / 2)] : null;
+
+    if (review) {
+      const material = findMaterialForTopic(review.name);
+      const source = material ? material.name : "review history";
+      const sessionDate = getStudyDateForIndex(index);
+      const signalText = review.signals?.length ? ` - ${review.signals.slice(0, 2).join(", ")}` : "";
+
+      return withSessionId({
+        day: formatSessionDate(sessionDate),
+        dateKey: formatDateKey(sessionDate),
+        task: `Spaced review: ${review.name}`,
+        time: `${Math.max(20, minutes - 10)} min`,
+        focus: review.name,
+        reason: `${review.status} review ${getReviewDueText(review)} - ${review.score}% confidence${signalText} - ${source}`,
+      });
+    }
+
     const deadline = openDeadlines[index % Math.max(openDeadlines.length, 1)];
     const shouldPlanDeadline =
       Boolean(deadline) && (index % 2 === 0 || getDaysUntil(deadline.dueDate) <= 7 || adaptiveTopics.length === 1);

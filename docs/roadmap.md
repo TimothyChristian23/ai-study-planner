@@ -71,7 +71,7 @@
 
 - [x] Track quiz performance by topic
 - [x] Prioritize weak topics in new schedules
-- Add spaced repetition review sessions
+- [x] Add spaced repetition review sessions
 - Show progress trends by course and exam
 
 ## Phase 5: Portfolio Polish
