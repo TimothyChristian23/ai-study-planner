@@ -56,11 +56,11 @@ node scripts/supabase-smoke.mjs
 
 Result:
 
-- Fixture embeddings: pending
-- Material Q&A: pending
-- Quiz generation: pending
-- Cleanup: pending
-- Notes: deployed Edge Functions now have `OPENAI_API_KEY`; this fixture still requires smoke-test user credentials plus a local `OPENAI_API_KEY` for seeded embedding setup
+- Fixture embeddings: blocked by OpenAI API billing
+- Material Q&A: pending until indexing can create embeddings
+- Quiz generation: pending until indexing can create embeddings
+- Cleanup: passed; temporary AI smoke course, jobs, and storage objects were removed
+- Notes: deployed Edge Functions have `OPENAI_API_KEY` and the validation reached OpenAI; indexing failed with `credit_balance_exhausted`, meaning the API organization has no prepaid credits remaining. Add credits in the OpenAI API billing portal, wait a few minutes for the balance to update, then rerun the AI validation.
 
 ## Index Job Monitor
 
@@ -111,5 +111,6 @@ Result:
 
 - Ready for public portfolio sharing:
 - Blockers:
+- OpenAI API credit balance is exhausted, so deployed AI indexing/Q&A/quiz generation cannot complete until API credits are added.
 - Follow-up fixes:
 - Rollback point:
