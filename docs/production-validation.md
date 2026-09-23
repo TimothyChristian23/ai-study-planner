@@ -18,7 +18,7 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
   - `OPENAI_API_KEY`: configured
   - `INDEX_WORKER_SECRET`: configured
 - Worker schedule: active through Supabase Cron as `ai-study-process-index-jobs` every 5 minutes
-- Smoke-test user: pending
+- Smoke-test user: configured for validation; password rotated after smoke run
 
 ## Smoke Suite
 
@@ -38,10 +38,10 @@ Result:
 - Static app assets: passed against `https://timothychristian23.github.io/ai-study-planner`
 - REST schema: passed for all checked tables
 - Edge Function validation: passed for validation-only paths that do not call OpenAI
-- Authenticated RLS CRUD: not run; smoke-test user credentials were not configured
-- Authenticated Storage: not run; smoke-test user credentials were not configured
-- Cleanup: no authenticated fixture data created
-- Latest public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; the remaining warning is expected because smoke-test user credentials were not set
+- Authenticated RLS CRUD: passed with isolated smoke course and child rows
+- Authenticated Storage: passed upload, download, signed URL, and cleanup
+- Cleanup: passed; smoke course and storage object were deleted
+- Latest authenticated notes: 38 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; the remaining warning is the optional AI fixture because local `OPENAI_API_KEY` was not set for seeded embeddings
 - Previous public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
 
 ## Optional AI Fixture
