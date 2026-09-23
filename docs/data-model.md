@@ -303,6 +303,6 @@ This document captures the local data shape used by the static prototype and the
 - The `index-material` Edge Function enqueues a durable material indexing job, then downloads stored PDFs and text-like files, extracts text, writes searchable `material_chunks`, and stores OpenAI embeddings when runtime allows.
 - The `process-index-jobs` Edge Function claims queued or stale indexing jobs through `claim_material_index_jobs`, then retries failed/stalled material processing from a signed-in request or worker-secret scheduler.
 - Cloud loading restores planner metadata and history; local source search still uses browser-indexed text until the frontend answer panel is routed through cloud retrieval.
-- Activity trends are derived from `completedSessions` and `quizHistory`; they are not stored separately.
+- Activity and course/exam progress trends are derived from `completedSessions`, `quizHistory`, `topicProgress`, deadlines, and generated schedules; they are not stored separately.
 - The MVP should store files in object storage, extracted chunks in the database, and embeddings in a vector-capable store.
 - AI answers should cite `material_chunks` by material name and page number.

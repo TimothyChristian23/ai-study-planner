@@ -2925,6 +2925,83 @@ function buildReadinessSnapshot() {
   };
 }
 
+function getStudyTargetDayCount(dayCount = 7) {
+  const studyDays = getStudyDays();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let targetDays = 0;
+
+  for (let offset = dayCount - 1; offset >= 0; offset -= 1) {
+    const day = new Date(today);
+    day.setDate(today.getDate() - offset);
+
+    if (studyDays.includes(day.getDay())) {
+      targetDays += 1;
+    }
+  }
+
+  return targetDays;
+}
+
+function formatProgressCountdown(daysUntil) {
+  if (daysUntil === null) {
+    return "No date";
+  }
+
+  if (daysUntil < 0) {
+    return "Past due";
+  }
+
+  if (daysUntil === 0) {
+    return "Due today";
+  }
+
+  if (daysUntil === 1) {
+    return "1 day left";
+  }
+
+  return `${daysUntil} days left`;
+}
+
+function getProgressTrendCards(activityTrend = getRecentActivityTrend(), readiness = buildReadinessSnapshot()) {
+  const weeklyMinutes = activityTrend.reduce((total, day) => total + day.minutes, 0);
+  const weeklyQuizAttempts = activityTrend.reduce((total, day) => total + day.quizAttempts, 0);
+  const dailyMinutes = Number(state.course.dailyMinutes) || 45;
+  const targetMinutes = Math.max(dailyMinutes, getStudyTargetDayCount(activityTrend.length) * dailyMinutes);
+  const coursePace = targetMinutes ? Math.round(clamp((weeklyMinutes / targetMinutes) * 100, 0, 100)) : 0;
+  const topics = getTopicStats().filter((topic) => topic.name !== "Upload materials");
+  const weakTopics = topics.filter((topic) => topic.score < 60);
+  const schedule = state.schedule.length ? state.schedule : buildSchedule();
+  const completedPlanSessions = schedule.filter(isSessionComplete).length;
+  const planCompletion = schedule.length ? Math.round((completedPlanSessions / schedule.length) * 100) : 0;
+  const nextDeadline = getNextDeadline();
+  const daysUntilTarget = nextDeadline ? getDaysUntil(nextDeadline.dueDate) : getDaysUntilExam();
+  const targetName = nextDeadline?.title || (state.course.examDate ? "Course exam" : "Exam");
+  const courseStatus =
+    coursePace >= 90 ? "On pace" : coursePace >= 60 ? "Building" : coursePace > 0 ? "Needs focus" : "Not started";
+
+  return [
+    {
+      label: "Course trend",
+      title: courseStatus,
+      value: `${coursePace}%`,
+      detail: `${weeklyMinutes}/${targetMinutes} study min this week`,
+      meta: `${weeklyQuizAttempts} quiz attempt${weeklyQuizAttempts === 1 ? "" : "s"} - ${weakTopics.length} weak topic${
+        weakTopics.length === 1 ? "" : "s"
+      }`,
+      progress: coursePace,
+    },
+    {
+      label: "Exam trend",
+      title: readiness.readinessLabel,
+      value: `${readiness.score}%`,
+      detail: `${formatProgressCountdown(daysUntilTarget)} - ${planCompletion}% plan done`,
+      meta: targetName,
+      progress: readiness.score,
+    },
+  ];
+}
+
 function formatCompletedAt(dateValue) {
   const date = new Date(dateValue);
 
@@ -3707,11 +3784,34 @@ function renderProgressInsights() {
   const spacedReviewList = document.querySelector("#spacedReviewList");
   const sessionLog = document.querySelector("#sessionLog");
   const activityTrend = document.querySelector("#activityTrend");
+  const progressTrends = document.querySelector("#progressTrends");
   const trendDays = getRecentActivityTrend();
+  const trendCards = getProgressTrendCards(trendDays);
 
   document.querySelector("#avgConfidence").textContent = `${getAverageConfidence()}%`;
   document.querySelector("#studyStreak").textContent = getStudyStreak();
   document.querySelector("#completedSessionCount").textContent = completedSessions.length;
+
+  progressTrends.innerHTML = trendCards
+    .map(
+      (card) => `
+        <div class="progress-trend-card">
+          <header>
+            <div>
+              <span>${escapeHTML(card.label)}</span>
+              <strong>${escapeHTML(card.title)}</strong>
+            </div>
+            <em>${escapeHTML(card.value)}</em>
+          </header>
+          <div class="progress-trend-meter" aria-label="${escapeHTML(card.label)} ${escapeHTML(card.value)}">
+            <i style="width: ${card.progress}%"></i>
+          </div>
+          <p>${escapeHTML(card.detail)}</p>
+          <small>${escapeHTML(card.meta)}</small>
+        </div>
+      `,
+    )
+    .join("");
 
   activityTrend.innerHTML = `
     <div class="activity-trend-header">
@@ -4268,6 +4368,7 @@ function buildStudyReport() {
   );
   const activityTrend = getRecentActivityTrend();
   const readiness = buildReadinessSnapshot();
+  const progressTrends = getProgressTrendCards(activityTrend, readiness);
   const generatedAt = new Date().toLocaleString();
 
   return [
@@ -4290,6 +4391,10 @@ function buildStudyReport() {
     `- Quiz accuracy: ${getQuizAccuracy(quizHistory)}% across ${quizHistory.length} attempt(s)`,
     `- Study streak: ${getStudyStreak()} day(s)`,
     `- Readiness: ${readiness.score}% (${readiness.readinessLabel})`,
+    "",
+    "## Progress Trends",
+    "",
+    ...progressTrends.map((trend) => `- ${trend.label}: ${trend.value} ${trend.title} - ${trend.detail} - ${trend.meta}`),
     "",
     "## 7-Day Activity",
     "",

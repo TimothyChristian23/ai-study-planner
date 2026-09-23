@@ -47,6 +47,7 @@ This repo currently includes:
 - Focus session timer with quick notes and progress updates
 - Progress insights for confidence, streak, completed sessions, and recent activity
 - 7-day activity trend for study minutes and quiz attempts
+- Course and exam progress trend cards tied to pace, weak topics, readiness, and plan completion
 - Exam readiness score with risk signals and next-step recommendations
 - Spaced-review queue that schedules due and upcoming reviews into generated plans
 - Adaptive schedule priority that weighs low confidence, quiz misses, due reviews, and deadline pressure

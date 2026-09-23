@@ -963,6 +963,89 @@ textarea {
   font-size: 0.84rem;
 }
 
+.progress-trends {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.progress-trend-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.progress-trend-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.progress-trend-card header div {
+  min-width: 0;
+}
+
+.progress-trend-card span,
+.progress-trend-card strong,
+.progress-trend-card em,
+.progress-trend-card p,
+.progress-trend-card small {
+  display: block;
+}
+
+.progress-trend-card span,
+.progress-trend-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.progress-trend-card strong {
+  color: var(--ink);
+  font-size: 1rem;
+  margin-top: 2px;
+}
+
+.progress-trend-card em {
+  color: var(--blue);
+  font-size: 1.2rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.progress-trend-card p {
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.progress-trend-meter {
+  border-radius: 999px;
+  background: #e8eef7;
+  height: 8px;
+  overflow: hidden;
+}
+
+.progress-trend-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--teal);
+}
+
+.progress-trend-card:nth-child(2) .progress-trend-meter i {
+  background: var(--gold);
+}
+
 .activity-trend {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1582,6 +1665,7 @@ textarea {
   .panel-header,
   .metric-row,
   .progress-summary,
+  .progress-trends,
   .quiz-stats,
   .readiness-factors,
   .focus-actions,
