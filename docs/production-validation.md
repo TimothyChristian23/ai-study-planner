@@ -16,8 +16,8 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
   - `generate-quiz`
 - Edge Function secrets:
   - `OPENAI_API_KEY`: configured
-  - `INDEX_WORKER_SECRET`: pending
-- Worker schedule: pending
+  - `INDEX_WORKER_SECRET`: configured
+- Worker schedule: active through Supabase Cron as `ai-study-process-index-jobs` every 5 minutes
 - Smoke-test user: pending
 
 ## Smoke Suite
@@ -41,7 +41,7 @@ Result:
 - Authenticated RLS CRUD: not run; smoke-test user credentials were not configured
 - Authenticated Storage: not run; smoke-test user credentials were not configured
 - Cleanup: no authenticated fixture data created
-- Latest local notes: 21 passed, 2 warnings, 0 failed with `NODE_OPTIONS=--use-system-ca`; warnings were expected because `AI_STUDY_APP_URL` and smoke-test user credentials were not set for this local pass
+- Latest public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; the remaining warning is expected because smoke-test user credentials were not set
 - Previous public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
 
 ## Optional AI Fixture
@@ -74,11 +74,11 @@ node scripts/index-job-monitor.mjs
 
 Result:
 
-- Failed jobs: pending
-- Stale running jobs: pending
-- Overdue queued jobs: pending
-- Material index status counts: pending
-- Notes: requires local `SUPABASE_SERVICE_ROLE_KEY`
+- Failed jobs: no rows in `material_index_jobs` during validation
+- Stale running jobs: no rows in `material_index_jobs` during validation
+- Overdue queued jobs: no rows in `material_index_jobs` during validation
+- Material index status counts: no queued material index jobs found during validation
+- Notes: Supabase Cron job `ai-study-process-index-jobs` is active on a 5-minute schedule; a manual Vault-backed worker trigger returned HTTP 200 with `mode: "worker"` and `claimed: 0`
 
 ## Manual User Flow
 
