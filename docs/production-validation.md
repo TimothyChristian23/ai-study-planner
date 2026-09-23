@@ -4,16 +4,19 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
 
 ## Deployment Snapshot
 
-- Validation date: 2026-09-21
+- Validation date: 2026-09-23
 - App URL: `https://timothychristian23.github.io/ai-study-planner`
 - Supabase project: `yawmgfvdkfubazucgyec`
-- Git commit: `446f7b1` (`Configure live Supabase deployment`)
+- Git commit: `f07617f` (`Add course and exam progress trends`)
 - Database migrations applied: `0001_initial_schema.sql` through `0004_material_index_jobs.sql`
 - Edge Functions deployed:
   - `ask-materials`
   - `index-material`
   - `process-index-jobs`
   - `generate-quiz`
+- Edge Function secrets:
+  - `OPENAI_API_KEY`: configured
+  - `INDEX_WORKER_SECRET`: pending
 - Worker schedule: pending
 - Smoke-test user: pending
 
@@ -38,7 +41,8 @@ Result:
 - Authenticated RLS CRUD: not run; smoke-test user credentials were not configured
 - Authenticated Storage: not run; smoke-test user credentials were not configured
 - Cleanup: no authenticated fixture data created
-- Notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
+- Latest local notes: 21 passed, 2 warnings, 0 failed with `NODE_OPTIONS=--use-system-ca`; warnings were expected because `AI_STUDY_APP_URL` and smoke-test user credentials were not set for this local pass
+- Previous public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
 
 ## Optional AI Fixture
 
@@ -56,7 +60,7 @@ Result:
 - Material Q&A: pending
 - Quiz generation: pending
 - Cleanup: pending
-- Notes: requires `OPENAI_API_KEY` and smoke-test user credentials
+- Notes: deployed Edge Functions now have `OPENAI_API_KEY`; this fixture still requires smoke-test user credentials plus a local `OPENAI_API_KEY` for seeded embedding setup
 
 ## Index Job Monitor
 
