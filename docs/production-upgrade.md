@@ -8,16 +8,16 @@ This document tracks the path from the deployed static prototype to a production
 - Auth: Supabase Auth
 - Database: Supabase Postgres with row-level security
 - File storage: Supabase Storage bucket for user course materials
-- AI: Supabase Edge Functions calling OpenAI server-side, with browser-local study fallbacks when API credits are unavailable
-- Retrieval: extracted material chunks stored in Postgres with vector embeddings
+- AI: Supabase Edge Functions calling Gemini or OpenAI server-side, with browser-local study fallbacks when API credits are unavailable
+- Retrieval: extracted material chunks stored in Postgres with provider-tagged vector embeddings
 
 ## Foundation Added
 
-- `.env.example` for browser-safe Supabase values and server-only OpenAI secrets
+- `.env.example` for browser-safe Supabase values and server-only Gemini/OpenAI secrets
 - `config.js` for browser-safe Supabase URL and anon key configuration
 - `supabase/migrations/0001_initial_schema.sql` for courses, materials, chunks, schedules, quizzes, progress, answers, citations, storage bucket, RLS policies, and a vector search RPC
 - `supabase/migrations/0002_static_client_sync.sql` for stable client IDs used by the static frontend sync path
-- `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and OpenAI Responses
+- `supabase/functions/ask-materials` for authenticated material Q&A using retrieved chunks and Gemini/OpenAI text generation
 - Static account panel with sign in, sign up, sign out, and session detection when Supabase config is present
 - Cloud course picker for selecting existing planner records or creating a new cloud course from the current local planner
 - Debounced cloud autosave for signed-in users, with manual sync/load safety controls and a remote-change guard before autosave overwrites existing cloud data
@@ -28,10 +28,11 @@ This document tracks the path from the deployed static prototype to a production
 - `material_index_jobs` plus `claim_material_index_jobs` for durable indexing work, active-job dedupe, and retryable stale job claims
 - `supabase/functions/index-material` for authenticated manual indexing that enqueues a durable job and processes it immediately when runtime allows
 - `supabase/functions/process-index-jobs` for signed-in or worker-secret job processing across queued and stale indexing jobs
-- The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval or OpenAI credits are unavailable
+- The `Ask materials` panel now calls `ask-materials` for signed-in users and falls back to local browser retrieval when cloud retrieval or provider credits are unavailable
 - Cloud material answers now hydrate from `material_questions` and `answer_citations` with stable client IDs to avoid duplicate answer history rows
 - `supabase/functions/generate-quiz` for creating and storing quiz cards from retrieved indexed chunks
-- Cloud quiz generation now falls back to source-backed local quiz cards when OpenAI credits are unavailable or cloud retrieval fails
+- Cloud quiz generation now falls back to source-backed local quiz cards when provider credits are unavailable or cloud retrieval fails
+- Cloud embeddings are tagged with `embedding_provider` and `embedding_model` so retrieval searches the same provider space that produced the chunks
 - `scripts/supabase-smoke.mjs` and the `Supabase Smoke Tests` workflow for non-destructive deployment checks against Supabase tables, Edge Functions, and static app assets
 - `scripts/index-job-monitor.mjs` for service-role operational checks against failed, stale running, and overdue queued indexing jobs
 - Optional authenticated smoke-user sign-in for RLS CRUD checks that create and clean up an isolated temporary course with child rows
@@ -62,11 +63,21 @@ This document tracks the path from the deployed static prototype to a production
 7. Set Edge Function secrets:
 
    ```powershell
+   supabase secrets set AI_PROVIDER=gemini
+   supabase secrets set GEMINI_API_KEY=your-gemini-api-key
+   supabase secrets set GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+   supabase secrets set GEMINI_ANSWER_MODEL=gemini-2.5-flash
+   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
+   ```
+
+   Optional OpenAI fallback/alternative:
+
+   ```powershell
+   supabase secrets set AI_PROVIDER=openai
    supabase secrets set OPENAI_API_KEY=sk-proj-your-key
    supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
    supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
-   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
    ```
 
 8. Deploy the Edge Functions:
@@ -108,7 +119,8 @@ This document tracks the path from the deployed static prototype to a production
 
    ```powershell
    $env:SUPABASE_SMOKE_RUN_AI="1"
-   $env:OPENAI_API_KEY="sk-proj-your-openai-key"
+   $env:AI_PROVIDER="gemini"
+   $env:GEMINI_API_KEY="your-gemini-api-key"
    node scripts/supabase-smoke.mjs
    ```
 
@@ -121,7 +133,7 @@ This document tracks the path from the deployed static prototype to a production
 
 ## Security Notes
 
-- OpenAI keys must never be exposed to the browser.
+- Gemini/OpenAI keys must never be exposed to the browser.
 - Keep row-level security enabled on every exposed table.
 - Storage object paths should start with the authenticated user ID so storage policies can isolate files.
 - The current static demo should remain available while production features are added behind Supabase configuration.

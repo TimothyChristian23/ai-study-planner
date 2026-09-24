@@ -15,7 +15,7 @@ Use this checklist when moving AI Study Planner from a portfolio prototype into 
   };
   ```
 
-- Never place `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `INDEX_WORKER_SECRET` in frontend files, GitHub Pages variables, screenshots, or client-side JavaScript.
+- Never place `GEMINI_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `INDEX_WORKER_SECRET` in frontend files, GitHub Pages variables, screenshots, or client-side JavaScript.
 
 ## Supabase Auth
 
@@ -31,9 +31,10 @@ Use this checklist when moving AI Study Planner from a portfolio prototype into 
 - Store Edge Function secrets only in Supabase:
 
   ```powershell
-  supabase secrets set OPENAI_API_KEY=sk-proj-your-key
-  supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-  supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
+  supabase secrets set AI_PROVIDER=gemini
+  supabase secrets set GEMINI_API_KEY=your-gemini-api-key
+  supabase secrets set GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+  supabase secrets set GEMINI_ANSWER_MODEL=gemini-2.5-flash
   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
   ```
@@ -58,7 +59,7 @@ Operational expectations:
 - `limit` must stay between `1` and `5`.
 - Manual indexing still tries to process immediately from `index-material`.
 - The worker should recover queued jobs and stale running jobs older than 10 minutes.
-- If OpenAI rate limits increase, lower the schedule frequency or reduce `limit`.
+- If AI provider rate limits increase, lower the schedule frequency or reduce `limit`.
 
 ## Monitoring
 
@@ -67,7 +68,7 @@ Check these after every deploy and at least once during a public demo period:
 - Supabase Edge Function logs for `ask-materials`, `index-material`, `process-index-jobs`, and `generate-quiz`
 - Supabase Auth logs for repeated failed sign-ins or redirect problems
 - Supabase Storage usage and rejected object requests
-- OpenAI usage and error rate
+- Gemini/OpenAI usage and error rate
 - GitHub Actions smoke-test results
 - Failed or stalled indexing jobs
 
@@ -128,11 +129,12 @@ $env:SUPABASE_SMOKE_PASSWORD="generated-dedicated-smoke-password"
 node scripts/supabase-smoke.mjs
 ```
 
-Enable the AI fixture only when you intentionally want to call OpenAI:
+Enable the AI fixture only when you intentionally want to call Gemini or OpenAI:
 
 ```powershell
 $env:SUPABASE_SMOKE_RUN_AI="1"
-$env:OPENAI_API_KEY="sk-proj-your-openai-key"
+$env:AI_PROVIDER="gemini"
+$env:GEMINI_API_KEY="your-gemini-api-key"
 node scripts/supabase-smoke.mjs
 ```
 

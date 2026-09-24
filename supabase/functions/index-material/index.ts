@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getAiProviderConfigurationMessage, hasAiProviderConfigured } from "../_shared/ai-providers.ts";
 import {
   DEFAULT_COURSE_CLIENT_ID,
   MaterialIndexError,
@@ -58,8 +59,8 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "materialClientId or materialId is required." }, 400);
     }
 
-    if (!Deno.env.get("OPENAI_API_KEY")) {
-      return jsonResponse({ error: "OPENAI_API_KEY is not configured." }, 500);
+    if (!hasAiProviderConfigured()) {
+      return jsonResponse({ error: getAiProviderConfigurationMessage() }, 500);
     }
 
     supabase = createClient(Deno.env.get("SUPABASE_URL") || "", getSupabaseKey(), {

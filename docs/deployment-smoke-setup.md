@@ -18,9 +18,10 @@ For domain, auth redirect, monitoring, rollback, and release-readiness checks, u
 4. Set Edge Function secrets:
 
    ```powershell
-   supabase secrets set OPENAI_API_KEY=sk-proj-your-key
-   supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-   supabase secrets set OPENAI_ANSWER_MODEL=gpt-5-mini
+   supabase secrets set AI_PROVIDER=gemini
+   supabase secrets set GEMINI_API_KEY=your-gemini-api-key
+   supabase secrets set GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+   supabase secrets set GEMINI_ANSWER_MODEL=gemini-2.5-flash
    supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
    supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
    ```
@@ -71,7 +72,9 @@ Add these under `Settings -> Secrets and variables -> Actions -> Secrets`.
 | `SUPABASE_SMOKE_EMAIL` | Recommended | Dedicated smoke-test user email for authenticated RLS, Storage, Q&A, and quiz checks. |
 | `SUPABASE_SMOKE_PASSWORD` | Recommended | Dedicated smoke-test user password. |
 | `SUPABASE_SMOKE_ACCESS_TOKEN` | Optional | Temporary signed-in user token if not using email/password. |
-| `OPENAI_API_KEY` | Optional | Enables the opt-in AI fixture smoke pass and should match the Edge Function secret. |
+| `GEMINI_API_KEY` | Optional | Enables the Gemini opt-in AI fixture smoke pass and should match the Edge Function secret when `AI_PROVIDER=gemini`. |
+| `OPENAI_API_KEY` | Optional | Enables the OpenAI opt-in AI fixture smoke pass and should match the Edge Function secret when `AI_PROVIDER=openai`. |
+| `GEMINI_EMBEDDING_MODEL` | Optional | Defaults to `gemini-embedding-001` with 1536 output dimensions. |
 | `OPENAI_EMBEDDING_MODEL` | Optional | Defaults to `text-embedding-3-small`; keep this at 1536 dimensions for the current vector schema. |
 
 Never add `SUPABASE_SERVICE_ROLE_KEY` to the static app or smoke workflow.
@@ -83,7 +86,8 @@ Add these under `Settings -> Secrets and variables -> Actions -> Variables`.
 | Variable | Recommended value | Purpose |
 | --- | --- | --- |
 | `AI_STUDY_APP_URL` | `https://timothychristian23.github.io/ai-study-planner` | Static app URL checked by the smoke runner. |
-| `SUPABASE_SMOKE_RUN_AI` | `false` by default | Set to `true` or `1` only when you want the workflow to call OpenAI-backed deployed functions. |
+| `AI_PROVIDER` | `gemini` | Provider used by the optional AI fixture; match the deployed Edge Function secret. |
+| `SUPABASE_SMOKE_RUN_AI` | `false` by default | Set to `true` or `1` only when you want the workflow to call provider-backed deployed functions. |
 
 ## Local Smoke Runs
 
@@ -108,11 +112,12 @@ Optional AI fixture checks:
 
 ```powershell
 $env:SUPABASE_SMOKE_RUN_AI="1"
-$env:OPENAI_API_KEY="sk-proj-your-openai-key"
+$env:AI_PROVIDER="gemini"
+$env:GEMINI_API_KEY="your-gemini-api-key"
 node scripts/supabase-smoke.mjs
 ```
 
-The AI fixture seeds temporary vector chunks, calls deployed material Q&A and quiz generation, and deletes the smoke course afterward so database rows cascade away.
+The AI fixture seeds temporary vector chunks with the selected provider, calls deployed material Q&A and quiz generation, and deletes the smoke course afterward so database rows cascade away. Set `AI_PROVIDER=openai` and `OPENAI_API_KEY` instead if the deployed Edge Functions are using OpenAI.
 
 ## GitHub Actions
 
@@ -129,7 +134,7 @@ If `SUPABASE_URL` or `SUPABASE_ANON_KEY` is missing, the workflow logs a skip me
 - `WARN` means a check was intentionally skipped or blocked by missing optional setup. Examples: no smoke user, AI fixture disabled, or Edge Function JWT validation blocking deeper validation.
 - `FAIL` means the deployment, schema, policies, storage bucket, secrets, or function behavior needs attention.
 
-The smoke runner is intentionally safe by default. It does not create user data unless a smoke user or token is configured, and it does not call OpenAI unless `SUPABASE_SMOKE_RUN_AI` is enabled.
+The smoke runner is intentionally safe by default. It does not create user data unless a smoke user or token is configured, and it does not call Gemini or OpenAI unless `SUPABASE_SMOKE_RUN_AI` is enabled.
 
 ## Cleanup Notes
 

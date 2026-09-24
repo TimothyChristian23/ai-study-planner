@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { extractText, getDocumentProxy } from "npm:unpdf@1.8.1";
+import { createEmbeddingsInBatches } from "./ai-providers.ts";
 
 export const MATERIAL_STORAGE_BUCKET = "course-materials";
 export const DEFAULT_COURSE_CLIENT_ID = "default-course";
@@ -156,57 +157,24 @@ async function extractStoredFileText(file: Blob, fileName: string) {
   throw new MaterialIndexError(`Unsupported file type: ${extension || file.type || "unknown"}.`, 422, false);
 }
 
-async function createEmbeddings(inputs: string[]) {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small",
-      input: inputs,
-      encoding_format: "float",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new MaterialIndexError(`Embedding request failed with ${response.status}: ${await response.text()}`);
-  }
-
-  const body = await response.json();
-  const embeddings = [...(body.data || [])]
-    .sort((a, b) => a.index - b.index)
-    .map((item) => item.embedding);
-
-  if (embeddings.length !== inputs.length || embeddings.some((embedding) => !Array.isArray(embedding))) {
-    throw new MaterialIndexError("Embedding response did not include a vector for every chunk.");
-  }
-
-  return embeddings;
-}
-
 async function createChunkRows(material: MaterialRow, chunks: Array<{ content: string; topic: string }>) {
-  const rows = [];
+  const result = await createEmbeddingsInBatches(
+    chunks.map((chunk) => chunk.content),
+    EMBEDDING_BATCH_SIZE,
+    { taskType: "RETRIEVAL_DOCUMENT" },
+  );
 
-  for (let index = 0; index < chunks.length; index += EMBEDDING_BATCH_SIZE) {
-    const batch = chunks.slice(index, index + EMBEDDING_BATCH_SIZE);
-    const embeddings = await createEmbeddings(batch.map((chunk) => chunk.content));
-
-    rows.push(
-      ...batch.map((chunk, batchIndex) => ({
-        material_id: material.id,
-        course_id: material.course_id,
-        user_id: material.user_id,
-        chunk_index: index + batchIndex,
-        content: chunk.content,
-        topic: chunk.topic,
-        embedding: embeddings[batchIndex],
-      })),
-    );
-  }
-
-  return rows;
+  return chunks.map((chunk, index) => ({
+    material_id: material.id,
+    course_id: material.course_id,
+    user_id: material.user_id,
+    chunk_index: index,
+    content: chunk.content,
+    topic: chunk.topic,
+    embedding: result.embeddings[index],
+    embedding_provider: result.provider,
+    embedding_model: result.model,
+  }));
 }
 
 export async function updateMaterialIndexState(

@@ -1,0 +1,386 @@
+export const AI_VECTOR_DIMENSIONS = 1536;
+
+export type AiProviderName = "openai" | "gemini";
+export type EmbeddingTaskType = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" | "SEMANTIC_SIMILARITY";
+
+type EmbeddingOptions = {
+  taskType?: EmbeddingTaskType;
+};
+
+type TextCompletionOptions = {
+  system: string;
+  user: string;
+  json?: boolean;
+  maxOutputTokens?: number;
+  temperature?: number;
+};
+
+type EmbeddingProviderResult = {
+  embeddings: number[][];
+  provider: AiProviderName;
+  model: string;
+};
+
+type TextCompletionResult = {
+  text: string;
+  provider: AiProviderName;
+  model: string;
+};
+
+const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+const OPENAI_ANSWER_MODEL = "gpt-5-mini";
+const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+const GEMINI_ANSWER_MODEL = "gemini-2.5-flash";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+function normalizeProvider(value = ""): AiProviderName | "" {
+  const provider = value.trim().toLowerCase();
+
+  if (provider === "openai" || provider === "gemini") {
+    return provider;
+  }
+
+  return "";
+}
+
+function hasProviderKey(provider: AiProviderName) {
+  return provider === "gemini" ? Boolean(Deno.env.get("GEMINI_API_KEY")) : Boolean(Deno.env.get("OPENAI_API_KEY"));
+}
+
+export function getConfiguredAiProviders() {
+  const preferredProvider = normalizeProvider(Deno.env.get("AI_PROVIDER") || "");
+  const providers: AiProviderName[] = [];
+  const addProvider = (provider: AiProviderName) => {
+    if (hasProviderKey(provider) && !providers.includes(provider)) {
+      providers.push(provider);
+    }
+  };
+
+  if (preferredProvider) {
+    addProvider(preferredProvider);
+  }
+
+  addProvider("gemini");
+  addProvider("openai");
+
+  return providers;
+}
+
+export function hasAiProviderConfigured() {
+  return getConfiguredAiProviders().length > 0;
+}
+
+export function getAiProviderConfigurationMessage() {
+  return "Set GEMINI_API_KEY or OPENAI_API_KEY in Supabase secrets to enable cloud AI.";
+}
+
+function getEmbeddingModel(provider: AiProviderName) {
+  return provider === "gemini"
+    ? Deno.env.get("GEMINI_EMBEDDING_MODEL") || GEMINI_EMBEDDING_MODEL
+    : Deno.env.get("OPENAI_EMBEDDING_MODEL") || OPENAI_EMBEDDING_MODEL;
+}
+
+function getAnswerModel(provider: AiProviderName) {
+  return provider === "gemini"
+    ? Deno.env.get("GEMINI_ANSWER_MODEL") || GEMINI_ANSWER_MODEL
+    : Deno.env.get("OPENAI_ANSWER_MODEL") || OPENAI_ANSWER_MODEL;
+}
+
+function getGeminiModelPath(model: string) {
+  return model.startsWith("models/") ? model : `models/${model}`;
+}
+
+async function readErrorBody(response: Response) {
+  const text = await response.text().catch(() => "");
+  return text ? `: ${text.slice(0, 1000)}` : "";
+}
+
+function validateEmbeddings(embeddings: unknown[], expectedCount: number, provider: AiProviderName, model: string) {
+  if (embeddings.length !== expectedCount || embeddings.some((embedding) => !Array.isArray(embedding))) {
+    throw new Error(`${provider} embedding response did not include a vector for every input.`);
+  }
+
+  const badDimension = embeddings.find(
+    (embedding) => Array.isArray(embedding) && embedding.length !== AI_VECTOR_DIMENSIONS,
+  );
+
+  if (badDimension && Array.isArray(badDimension)) {
+    throw new Error(
+      `${provider} embedding model ${model} returned ${badDimension.length} dimensions; expected ${AI_VECTOR_DIMENSIONS}.`,
+    );
+  }
+
+  return embeddings as number[][];
+}
+
+async function createOpenAiEmbeddings(inputs: string[]) {
+  const model = getEmbeddingModel("openai");
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      input: inputs,
+      encoding_format: "float",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI embedding request failed with ${response.status}${await readErrorBody(response)}`);
+  }
+
+  const body = await response.json();
+  const embeddings = [...(body.data || [])]
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.embedding);
+
+  return {
+    embeddings: validateEmbeddings(embeddings, inputs.length, "openai", model),
+    provider: "openai" as const,
+    model,
+  };
+}
+
+async function createGeminiEmbeddings(inputs: string[], options: EmbeddingOptions = {}) {
+  const model = getEmbeddingModel("gemini");
+  const response = await fetch(`${GEMINI_API_BASE}/${getGeminiModelPath(model)}:batchEmbedContents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
+    },
+    body: JSON.stringify({
+      requests: inputs.map((input) => ({
+        model: getGeminiModelPath(model),
+        content: {
+          parts: [{ text: input }],
+        },
+        embedContentConfig: {
+          taskType: options.taskType || "SEMANTIC_SIMILARITY",
+          outputDimensionality: AI_VECTOR_DIMENSIONS,
+        },
+      })),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini embedding request failed with ${response.status}${await readErrorBody(response)}`);
+  }
+
+  const body = await response.json();
+  const embeddings = [...(body.embeddings || [])].map((item) => item.values);
+
+  return {
+    embeddings: validateEmbeddings(embeddings, inputs.length, "gemini", model),
+    provider: "gemini" as const,
+    model,
+  };
+}
+
+export async function createEmbeddingsForProvider(
+  provider: AiProviderName,
+  inputs: string[],
+  options: EmbeddingOptions = {},
+): Promise<EmbeddingProviderResult> {
+  return provider === "gemini" ? createGeminiEmbeddings(inputs, options) : createOpenAiEmbeddings(inputs);
+}
+
+async function withAiProviderFallback<T>(
+  operationName: string,
+  callback: (provider: AiProviderName) => Promise<T>,
+): Promise<T> {
+  const providers = getConfiguredAiProviders();
+  let lastError: unknown = null;
+
+  if (!providers.length) {
+    throw new Error(getAiProviderConfigurationMessage());
+  }
+
+  for (const provider of providers) {
+    try {
+      return await callback(provider);
+    } catch (error) {
+      lastError = error;
+      console.error(`${operationName} failed with ${provider}.`, error);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(`${operationName} failed for every configured AI provider.`);
+}
+
+export async function createEmbeddings(
+  inputs: string[],
+  options: EmbeddingOptions = {},
+): Promise<EmbeddingProviderResult> {
+  return withAiProviderFallback("Embedding request", (provider) => createEmbeddingsForProvider(provider, inputs, options));
+}
+
+export async function createEmbeddingsInBatches(
+  inputs: string[],
+  batchSize: number,
+  options: EmbeddingOptions = {},
+): Promise<EmbeddingProviderResult> {
+  return withAiProviderFallback("Embedding request", async (provider) => {
+    const embeddings: number[][] = [];
+    let model = getEmbeddingModel(provider);
+
+    for (let index = 0; index < inputs.length; index += batchSize) {
+      const batch = inputs.slice(index, index + batchSize);
+      const result = await createEmbeddingsForProvider(provider, batch, options);
+      model = result.model;
+      embeddings.push(...result.embeddings);
+    }
+
+    return {
+      embeddings,
+      provider,
+      model,
+    };
+  });
+}
+
+export async function createEmbedding(input: string, options: EmbeddingOptions = {}) {
+  const result = await createEmbeddings([input], options);
+
+  return {
+    embedding: result.embeddings[0],
+    provider: result.provider,
+    model: result.model,
+  };
+}
+
+function getOpenAiOutputText(response: Record<string, unknown>) {
+  if (typeof response.output_text === "string") {
+    return response.output_text;
+  }
+
+  const output = Array.isArray(response.output) ? response.output : [];
+  return output
+    .flatMap((item) => {
+      const content = item && typeof item === "object" && "content" in item ? item.content : [];
+      return Array.isArray(content) ? content : [];
+    })
+    .map((item) => {
+      if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+        return item.text;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function getGeminiOutputText(response: Record<string, unknown>) {
+  const candidates = Array.isArray(response.candidates) ? response.candidates : [];
+  const parts = candidates.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object" || !("content" in candidate)) {
+      return [];
+    }
+
+    const content = candidate.content;
+
+    if (!content || typeof content !== "object" || !("parts" in content) || !Array.isArray(content.parts)) {
+      return [];
+    }
+
+    return content.parts;
+  });
+
+  return parts
+    .map((part) => {
+      if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+        return part.text;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+async function createOpenAiTextCompletion(options: TextCompletionOptions): Promise<TextCompletionResult> {
+  const model = getAnswerModel("openai");
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: "system",
+          content: options.system,
+        },
+        {
+          role: "user",
+          content: options.user,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI generation request failed with ${response.status}${await readErrorBody(response)}`);
+  }
+
+  const body = await response.json();
+
+  return {
+    text: getOpenAiOutputText(body),
+    provider: "openai",
+    model,
+  };
+}
+
+async function createGeminiTextCompletion(options: TextCompletionOptions): Promise<TextCompletionResult> {
+  const model = getAnswerModel("gemini");
+  const response = await fetch(`${GEMINI_API_BASE}/${getGeminiModelPath(model)}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: options.system }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: options.user }],
+        },
+      ],
+      generationConfig: {
+        temperature: options.temperature ?? 0.2,
+        maxOutputTokens: options.maxOutputTokens ?? 700,
+        ...(options.json ? { responseMimeType: "application/json" } : {}),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini generation request failed with ${response.status}${await readErrorBody(response)}`);
+  }
+
+  const body = await response.json();
+
+  return {
+    text: getGeminiOutputText(body),
+    provider: "gemini",
+    model,
+  };
+}
+
+export async function createTextCompletion(options: TextCompletionOptions): Promise<TextCompletionResult> {
+  return withAiProviderFallback("Text generation", (provider) =>
+    provider === "gemini" ? createGeminiTextCompletion(options) : createOpenAiTextCompletion(options),
+  );
+}

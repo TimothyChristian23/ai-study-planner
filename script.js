@@ -941,7 +941,7 @@ async function getReadableCloudError(error) {
 }
 
 function isAiUnavailableError(error) {
-  return /(credit_balance_exhausted|insufficient_quota|no credits remaining|prepaid credits|OPENAI_API_KEY|Embedding request failed with 429|OpenAI)/i.test(
+  return /(credit_balance_exhausted|insufficient_quota|no credits remaining|prepaid credits|API key not valid|quota|rate limit|OPENAI_API_KEY|GEMINI_API_KEY|AI_PROVIDER|Embedding request failed with 429|OpenAI|Gemini)/i.test(
     getErrorText(error),
   );
 }

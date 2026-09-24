@@ -28,7 +28,7 @@ This is a dependency-free static prototype focused on the core product workflow:
 
 Full-stack work is now underway with durable file storage, server-side parsing, embeddings, and AI-generated answers over retrieved material chunks. The static demo still keeps local-first study tools so the portfolio walkthrough works without credentials or paid API credits.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, authenticated Edge Functions that can call OpenAI server-side, and browser fallbacks when cloud AI is unavailable.
+The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, authenticated Edge Functions that can call Gemini or OpenAI server-side, and browser fallbacks when cloud AI is unavailable.
 
 ## Current Prototype
 
@@ -66,7 +66,7 @@ This repo currently includes:
 - Cloud conflict resolution actions for loading cloud, keeping local, or overwriting a changed planner
 - Signed-in Supabase Storage uploads for raw course files, with storage paths saved on material records
 - Signed download and reprocess controls for cloud-stored course files
-- Server-side material indexing for stored PDFs and text-like files, with durable jobs, retry metadata, chunking, optional OpenAI embeddings, and local study mode when credits are unavailable
+- Server-side material indexing for stored PDFs and text-like files, with durable jobs, retry metadata, chunking, optional Gemini/OpenAI embeddings, and local study mode when provider credits are unavailable
 - Signed-in `Ask materials` answers from the authenticated retrieval Edge Function, with source-backed local retrieval fallback
 - Signed-in quiz generation from indexed cloud material chunks, with source-backed local quiz fallback
 - Responsive dashboard layout with mobile-friendly navigation and controls
@@ -100,15 +100,16 @@ $env:SUPABASE_SMOKE_PASSWORD="generated-dedicated-smoke-password"
 node scripts/supabase-smoke.mjs
 ```
 
-To run the optional AI fixture pass against deployed `ask-materials` and `generate-quiz`, also set:
+To run the optional AI fixture pass against deployed `ask-materials` and `generate-quiz`, also set a matching AI provider key:
 
 ```powershell
+$env:AI_PROVIDER="gemini"
+$env:GEMINI_API_KEY="your-gemini-api-key"
 $env:SUPABASE_SMOKE_RUN_AI="1"
-$env:OPENAI_API_KEY="sk-proj-your-openai-key"
 node scripts/supabase-smoke.mjs
 ```
 
-The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, reaches deployed Edge Functions through validation paths that do not call OpenAI, and optionally signs in as the smoke user to create, read, update, and clean up an isolated temporary course with child rows. The authenticated pass also uploads, downloads, signs, verifies, and deletes a tiny file in the private `course-materials` bucket. The opt-in AI fixture seeds temporary vector chunks, calls deployed material Q&A and quiz generation, then cleans up through the same course cascade. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set; add `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` secrets to enable the authenticated CRUD and Storage pass, and set `SUPABASE_SMOKE_RUN_AI` plus `OPENAI_API_KEY` to enable the AI fixture. After deployment, `node scripts/index-job-monitor.mjs` can be run with `SUPABASE_SERVICE_ROLE_KEY` to check failed, stalled, and overdue indexing jobs.
+The smoke runner validates deployed table columns with `limit=0`, checks the static app assets when `AI_STUDY_APP_URL` is set, reaches deployed Edge Functions through validation paths that do not call an AI provider, and optionally signs in as the smoke user to create, read, update, and clean up an isolated temporary course with child rows. The authenticated pass also uploads, downloads, signs, verifies, and deletes a tiny file in the private `course-materials` bucket. The opt-in AI fixture seeds temporary vector chunks with the selected provider, calls deployed material Q&A and quiz generation, then cleans up through the same course cascade. GitHub Actions can run the same check from `Supabase Smoke Tests` when the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets are set; add `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` secrets to enable the authenticated CRUD and Storage pass, and set `SUPABASE_SMOKE_RUN_AI` plus `GEMINI_API_KEY` or `OPENAI_API_KEY` to enable the AI fixture. After deployment, `node scripts/index-job-monitor.mjs` can be run with `SUPABASE_SERVICE_ROLE_KEY` to check failed, stalled, and overdue indexing jobs.
 
 ## Product Goals
 

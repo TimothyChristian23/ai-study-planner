@@ -30,7 +30,17 @@ const tableChecks = [
   },
   {
     table: "material_chunks",
-    columns: ["id", "material_id", "course_id", "chunk_index", "content", "topic", "embedding"],
+    columns: [
+      "id",
+      "material_id",
+      "course_id",
+      "chunk_index",
+      "content",
+      "topic",
+      "embedding",
+      "embedding_provider",
+      "embedding_model",
+    ],
   },
   {
     table: "material_index_jobs",
@@ -458,8 +468,41 @@ async function invokeEdgeFunction({ supabaseUrl, supabaseAnonKey, authToken, nam
   return { response, data };
 }
 
+function getSmokeAiProvider() {
+  const preferred = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
+
+  if (preferred === "gemini" || preferred === "openai") {
+    return preferred;
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    return "gemini";
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    return "openai";
+  }
+
+  return "";
+}
+
+function validateFixtureEmbeddings(provider, embeddings, inputs) {
+  if (embeddings.length !== inputs.length || embeddings.some((embedding) => !Array.isArray(embedding))) {
+    fail("AI fixture embeddings", `${provider} did not return an embedding for every fixture input.`);
+    return false;
+  }
+
+  if (embeddings.some((embedding) => embedding.length !== 1536)) {
+    fail("AI fixture embeddings", "Smoke fixture requires 1536-dimension embeddings.");
+    return false;
+  }
+
+  return true;
+}
+
 async function createOpenAiEmbeddings(inputs) {
   const apiKey = process.env.OPENAI_API_KEY || "";
+  const model = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
 
   if (!apiKey) {
     fail("AI fixture embeddings", "Set OPENAI_API_KEY when SUPABASE_SMOKE_RUN_AI is enabled.");
@@ -473,7 +516,7 @@ async function createOpenAiEmbeddings(inputs) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
+      model,
       input: inputs,
       encoding_format: "float",
     }),
@@ -489,19 +532,76 @@ async function createOpenAiEmbeddings(inputs) {
     .sort((a, b) => a.index - b.index)
     .map((item) => item.embedding);
 
-  if (embeddings.length !== inputs.length || embeddings.some((embedding) => !Array.isArray(embedding))) {
-    fail("AI fixture embeddings", "OpenAI did not return an embedding for every fixture input.");
+  if (!validateFixtureEmbeddings("OpenAI", embeddings, inputs)) {
     return null;
   }
 
-  if (embeddings.some((embedding) => embedding.length !== 1536)) {
-    fail("AI fixture embeddings", "Smoke fixture requires 1536-dimension embeddings. Use text-embedding-3-small.");
+  pass("AI fixture embeddings", `Created ${embeddings.length} OpenAI fixture embeddings.`);
+
+  return { embeddings, provider: "openai", model };
+}
+
+async function createGeminiEmbeddings(inputs) {
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  const model = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+
+  if (!apiKey) {
+    fail("AI fixture embeddings", "Set GEMINI_API_KEY when SUPABASE_SMOKE_RUN_AI is enabled with AI_PROVIDER=gemini.");
     return null;
   }
 
-  pass("AI fixture embeddings", `Created ${embeddings.length} fixture embeddings.`);
+  const modelPath = model.startsWith("models/") ? model : `models/${model}`;
+  const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/${modelPath}:batchEmbedContents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      requests: inputs.map((input) => ({
+        model: modelPath,
+        content: {
+          parts: [{ text: input }],
+        },
+        embedContentConfig: {
+          taskType: "RETRIEVAL_QUERY",
+          outputDimensionality: 1536,
+        },
+      })),
+    }),
+  });
+  const body = await readResponseBody(response);
 
-  return embeddings;
+  if (!response.ok) {
+    fail("AI fixture embeddings", `Received ${response.status}: ${truncate(JSON.stringify(body))}`);
+    return null;
+  }
+
+  const embeddings = [...(body.embeddings || [])].map((item) => item.values);
+
+  if (!validateFixtureEmbeddings("Gemini", embeddings, inputs)) {
+    return null;
+  }
+
+  pass("AI fixture embeddings", `Created ${embeddings.length} Gemini fixture embeddings.`);
+
+  return { embeddings, provider: "gemini", model };
+}
+
+async function createAiEmbeddings(inputs) {
+  const provider = getSmokeAiProvider();
+
+  if (provider === "gemini") {
+    return createGeminiEmbeddings(inputs);
+  }
+
+  if (provider === "openai") {
+    return createOpenAiEmbeddings(inputs);
+  }
+
+  fail("AI fixture embeddings", "Set GEMINI_API_KEY or OPENAI_API_KEY when SUPABASE_SMOKE_RUN_AI is enabled.");
+
+  return null;
 }
 
 async function deleteSmokeStorageObject({ supabaseUrl, supabaseAnonKey, authToken, objectPath }) {
@@ -624,20 +724,21 @@ async function checkAiCloudFixture({ supabaseUrl, supabaseAnonKey, session, cour
   if (!isEnabled(process.env.SUPABASE_SMOKE_RUN_AI)) {
     warn(
       "AI cloud fixture",
-      "Set SUPABASE_SMOKE_RUN_AI=1 and OPENAI_API_KEY to run material Q&A and quiz generation smoke checks.",
+      "Set SUPABASE_SMOKE_RUN_AI=1 and GEMINI_API_KEY or OPENAI_API_KEY to run material Q&A and quiz generation smoke checks.",
     );
     return;
   }
 
-  const embeddings = await createOpenAiEmbeddings([
+  const embeddingResult = await createAiEmbeddings([
     SMOKE_QA_QUESTION,
     `Generate active recall quiz questions about ${SMOKE_QUIZ_TOPIC}.`,
   ]);
 
-  if (!embeddings) {
+  if (!embeddingResult) {
     return;
   }
 
+  const { embeddings, provider, model } = embeddingResult;
   const chunkRows = [
     {
       material_id: materialId,
@@ -647,6 +748,8 @@ async function checkAiCloudFixture({ supabaseUrl, supabaseAnonKey, session, cour
         "Breadth first search uses a queue to visit graph neighbors layer by layer. Review queue order, visited sets, and shortest path behavior in unweighted graphs.",
       topic: SMOKE_QUIZ_TOPIC,
       embedding: embeddings[0],
+      embedding_provider: provider,
+      embedding_model: model,
     },
     {
       material_id: materialId,
@@ -656,6 +759,8 @@ async function checkAiCloudFixture({ supabaseUrl, supabaseAnonKey, session, cour
         "Depth first search uses recursion or a stack to explore one graph path before backtracking. Compare DFS traversal order with breadth first search.",
       topic: SMOKE_QUIZ_TOPIC,
       embedding: embeddings[1],
+      embedding_provider: provider,
+      embedding_model: model,
     },
   ];
   const { response: chunkResponse, data: chunkData } = await restRequest({

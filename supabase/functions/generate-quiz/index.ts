@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import {
+  createEmbedding,
+  createTextCompletion,
+  getAiProviderConfigurationMessage,
+  hasAiProviderConfigured,
+} from "../_shared/ai-providers.ts";
 
 type MatchChunk = {
   chunk_id: string;
@@ -37,56 +43,6 @@ function getSupabaseKey() {
   return Deno.env.get("SUPABASE_ANON_KEY") || "";
 }
 
-function getOutputText(response: Record<string, unknown>) {
-  if (typeof response.output_text === "string") {
-    return response.output_text;
-  }
-
-  const output = Array.isArray(response.output) ? response.output : [];
-  return output
-    .flatMap((item) => {
-      const content = item && typeof item === "object" && "content" in item ? item.content : [];
-      return Array.isArray(content) ? content : [];
-    })
-    .map((item) => {
-      if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
-        return item.text;
-      }
-
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-}
-
-async function createEmbedding(input: string) {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small",
-      input,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Embedding request failed with ${response.status}`);
-  }
-
-  const body = await response.json();
-  const embedding = body.data?.[0]?.embedding;
-
-  if (!Array.isArray(embedding)) {
-    throw new Error("Embedding response did not include a vector.");
-  }
-
-  return embedding;
-}
-
 function parseQuizItems(text: string): GeneratedQuizItem[] {
   try {
     const parsed = JSON.parse(text);
@@ -110,36 +66,16 @@ async function createQuizItems(topic: string, count: number, chunks: MatchChunk[
     })
     .join("\n\n");
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: Deno.env.get("OPENAI_ANSWER_MODEL") || "gpt-5-mini",
-      input: [
-        {
-          role: "system",
-          content:
-            "Create concise active-recall quiz cards only from the provided excerpts. Return JSON only: an array of objects with topic, question, answer, and sourceIndex.",
-        },
-        {
-          role: "user",
-          content:
-            `Topic focus: ${topic}\nCount: ${count}\n\n` +
-            `Study material excerpts:\n${context}`,
-        },
-      ],
-    }),
+  const result = await createTextCompletion({
+    system:
+      "Create concise active-recall quiz cards only from the provided excerpts. Return JSON only: an array of objects with topic, question, answer, and sourceIndex.",
+    user: `Topic focus: ${topic}\nCount: ${count}\n\nStudy material excerpts:\n${context}`,
+    json: true,
+    maxOutputTokens: 900,
+    temperature: 0.3,
   });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI quiz request failed with ${response.status}`);
-  }
-
-  const body = await response.json();
-  return parseQuizItems(getOutputText(body))
+  return parseQuizItems(result.text)
     .filter((item) => item.question?.trim() && item.answer?.trim())
     .slice(0, count);
 }
@@ -166,8 +102,8 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "courseId is required." }, 400);
     }
 
-    if (!Deno.env.get("OPENAI_API_KEY")) {
-      return jsonResponse({ error: "OPENAI_API_KEY is not configured." }, 500);
+    if (!hasAiProviderConfigured()) {
+      return jsonResponse({ error: getAiProviderConfigurationMessage() }, 500);
     }
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL") || "", getSupabaseKey(), {
@@ -176,12 +112,15 @@ Deno.serve(async (request) => {
       },
     });
 
-    const embedding = await createEmbedding(`Generate active recall quiz questions about ${topic}.`);
+    const embeddingResult = await createEmbedding(`Generate active recall quiz questions about ${topic}.`, {
+      taskType: "RETRIEVAL_QUERY",
+    });
     const { data: matches, error: matchError } = await supabase.rpc("match_material_chunks", {
-      query_embedding: embedding,
+      query_embedding: embeddingResult.embedding,
       match_course_id: courseId,
       match_count: Math.max(quizCount * 2, 8),
       similarity_threshold: 0.45,
+      match_embedding_provider: embeddingResult.provider,
     });
 
     if (matchError) {
@@ -236,6 +175,8 @@ Deno.serve(async (request) => {
     });
   } catch (error) {
     console.error(error);
-    return jsonResponse({ error: "Could not generate quiz cards from materials." }, 500);
+    const message = error instanceof Error ? error.message : "Could not generate quiz cards from materials.";
+
+    return jsonResponse({ error: message }, 500);
   }
 });
