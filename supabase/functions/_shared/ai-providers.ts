@@ -30,7 +30,7 @@ type TextCompletionResult = {
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const OPENAI_ANSWER_MODEL = "gpt-5-mini";
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
-const GEMINI_ANSWER_MODEL = "gemini-2.5-flash";
+const GEMINI_ANSWER_MODEL = "gemini-3.8-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 function normalizeProvider(value = ""): AiProviderName | "" {
