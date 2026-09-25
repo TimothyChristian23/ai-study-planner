@@ -486,6 +486,17 @@ function getSmokeAiProvider() {
   return "";
 }
 
+function truncateAndNormalizeFixtureEmbedding(embedding) {
+  if (!Array.isArray(embedding)) {
+    return embedding;
+  }
+
+  const values = embedding.slice(0, 1536).map((value) => Number(value) || 0);
+  const magnitude = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0)) || 1;
+
+  return values.map((value) => value / magnitude);
+}
+
 function validateFixtureEmbeddings(provider, embeddings, inputs) {
   if (embeddings.length !== inputs.length || embeddings.some((embedding) => !Array.isArray(embedding))) {
     fail("AI fixture embeddings", `${provider} did not return an embedding for every fixture input.`);
@@ -493,7 +504,7 @@ function validateFixtureEmbeddings(provider, embeddings, inputs) {
   }
 
   if (embeddings.some((embedding) => embedding.length !== 1536)) {
-    fail("AI fixture embeddings", "Smoke fixture requires 1536-dimension embeddings.");
+    fail("AI fixture embeddings", `Smoke fixture expected 1536-dimension ${provider} embeddings.`);
     return false;
   }
 
@@ -564,7 +575,6 @@ async function createGeminiEmbeddings(inputs) {
           parts: [{ text: input }],
         },
         taskType: "RETRIEVAL_QUERY",
-        outputDimensionality: 1536,
       })),
     }),
   });
@@ -575,7 +585,7 @@ async function createGeminiEmbeddings(inputs) {
     return null;
   }
 
-  const embeddings = [...(body.embeddings || [])].map((item) => item.values);
+  const embeddings = [...(body.embeddings || [])].map((item) => truncateAndNormalizeFixtureEmbedding(item.values));
 
   if (!validateFixtureEmbeddings("Gemini", embeddings, inputs)) {
     return null;

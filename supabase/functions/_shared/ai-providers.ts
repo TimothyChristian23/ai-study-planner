@@ -1,4 +1,4 @@
-export const AI_VECTOR_DIMENSIONS = 1536;
+const AI_VECTOR_DIMENSIONS = 1536;
 
 export type AiProviderName = "openai" | "gemini";
 export type EmbeddingTaskType = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" | "SEMANTIC_SIMILARITY";
@@ -121,6 +121,17 @@ function validateEmbeddings(embeddings: unknown[], expectedCount: number, provid
   return embeddings as number[][];
 }
 
+function truncateAndNormalizeEmbedding(embedding: unknown) {
+  if (!Array.isArray(embedding)) {
+    return embedding;
+  }
+
+  const values = embedding.slice(0, AI_VECTOR_DIMENSIONS).map((value) => Number(value) || 0);
+  const magnitude = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0)) || 1;
+
+  return values.map((value) => value / magnitude);
+}
+
 async function createOpenAiEmbeddings(inputs: string[]) {
   const model = getEmbeddingModel("openai");
   const response = await fetch("https://api.openai.com/v1/embeddings", {
@@ -167,7 +178,6 @@ async function createGeminiEmbeddings(inputs: string[], options: EmbeddingOption
           parts: [{ text: input }],
         },
         taskType: options.taskType || "SEMANTIC_SIMILARITY",
-        outputDimensionality: AI_VECTOR_DIMENSIONS,
       })),
     }),
   });
@@ -177,7 +187,7 @@ async function createGeminiEmbeddings(inputs: string[], options: EmbeddingOption
   }
 
   const body = await response.json();
-  const embeddings = [...(body.embeddings || [])].map((item) => item.values);
+  const embeddings = [...(body.embeddings || [])].map((item) => truncateAndNormalizeEmbedding(item.values));
 
   return {
     embeddings: validateEmbeddings(embeddings, inputs.length, "gemini", model),
