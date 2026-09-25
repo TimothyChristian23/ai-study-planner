@@ -30,8 +30,9 @@ type TextCompletionResult = {
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const OPENAI_ANSWER_MODEL = "gpt-5-mini";
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
-const GEMINI_ANSWER_MODEL = "gemini-3.8-flash";
+const GEMINI_ANSWER_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const AI_RETRY_DELAYS_MS = [1200, 3000];
 
 function normalizeProvider(value = ""): AiProviderName | "" {
   const provider = value.trim().toLowerCase();
@@ -103,6 +104,50 @@ async function readErrorBody(response: Response) {
   return text ? `: ${text.slice(0, 1000)}` : "";
 }
 
+function parseRetryAfterMs(value: string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const seconds = Number(value);
+
+  if (Number.isFinite(seconds)) {
+    return Math.max(seconds * 1000, 0);
+  }
+
+  const retryAt = Date.parse(value);
+
+  return Number.isNaN(retryAt) ? 0 : Math.max(retryAt - Date.now(), 0);
+}
+
+function shouldRetryAiResponse(response: Response) {
+  if (response.status === 429) {
+    return Boolean(response.headers.get("retry-after"));
+  }
+
+  return [408, 500, 502, 503, 504].includes(response.status);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchAiWithRetry(label: string, input: string, init: RequestInit) {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(input, init);
+
+    if (!shouldRetryAiResponse(response) || attempt >= AI_RETRY_DELAYS_MS.length) {
+      return response;
+    }
+
+    await response.text().catch(() => "");
+    const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+    const delayMs = retryAfterMs || AI_RETRY_DELAYS_MS[attempt];
+    console.warn(`${label} returned ${response.status}; retrying in ${delayMs}ms.`);
+    await sleep(delayMs);
+  }
+}
+
 function validateEmbeddings(embeddings: unknown[], expectedCount: number, provider: AiProviderName, model: string) {
   if (embeddings.length !== expectedCount || embeddings.some((embedding) => !Array.isArray(embedding))) {
     throw new Error(`${provider} embedding response did not include a vector for every input.`);
@@ -134,7 +179,7 @@ function truncateAndNormalizeEmbedding(embedding: unknown) {
 
 async function createOpenAiEmbeddings(inputs: string[]) {
   const model = getEmbeddingModel("openai");
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
+  const response = await fetchAiWithRetry("OpenAI embedding request", "https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
@@ -165,22 +210,26 @@ async function createOpenAiEmbeddings(inputs: string[]) {
 
 async function createGeminiEmbeddings(inputs: string[], options: EmbeddingOptions = {}) {
   const model = getEmbeddingModel("gemini");
-  const response = await fetch(`${GEMINI_API_BASE}/${getGeminiModelPath(model)}:batchEmbedContents`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
+  const response = await fetchAiWithRetry(
+    "Gemini embedding request",
+    `${GEMINI_API_BASE}/${getGeminiModelPath(model)}:batchEmbedContents`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
+      },
+      body: JSON.stringify({
+        requests: inputs.map((input) => ({
+          model: getGeminiModelPath(model),
+          content: {
+            parts: [{ text: input }],
+          },
+          taskType: options.taskType || "SEMANTIC_SIMILARITY",
+        })),
+      }),
     },
-    body: JSON.stringify({
-      requests: inputs.map((input) => ({
-        model: getGeminiModelPath(model),
-        content: {
-          parts: [{ text: input }],
-        },
-        taskType: options.taskType || "SEMANTIC_SIMILARITY",
-      })),
-    }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Gemini embedding request failed with ${response.status}${await readErrorBody(response)}`);
@@ -323,7 +372,7 @@ function getGeminiOutputText(response: Record<string, unknown>) {
 
 async function createOpenAiTextCompletion(options: TextCompletionOptions): Promise<TextCompletionResult> {
   const model = getAnswerModel("openai");
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetchAiWithRetry("OpenAI generation request", "https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
@@ -359,29 +408,33 @@ async function createOpenAiTextCompletion(options: TextCompletionOptions): Promi
 
 async function createGeminiTextCompletion(options: TextCompletionOptions): Promise<TextCompletionResult> {
   const model = getAnswerModel("gemini");
-  const response = await fetch(`${GEMINI_API_BASE}/${getGeminiModelPath(model)}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: options.system }],
+  const response = await fetchAiWithRetry(
+    "Gemini generation request",
+    `${GEMINI_API_BASE}/${getGeminiModelPath(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
       },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: options.user }],
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: options.system }],
         },
-      ],
-      generationConfig: {
-        temperature: options.temperature ?? 0.2,
-        maxOutputTokens: options.maxOutputTokens ?? 700,
-        ...(options.json ? { responseMimeType: "application/json" } : {}),
-      },
-    }),
-  });
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: options.user }],
+          },
+        ],
+        generationConfig: {
+          temperature: options.temperature ?? 0.2,
+          maxOutputTokens: options.maxOutputTokens ?? 700,
+          ...(options.json ? { responseMimeType: "application/json" } : {}),
+        },
+      }),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Gemini generation request failed with ${response.status}${await readErrorBody(response)}`);

@@ -4,20 +4,22 @@ Use this report after deploying the latest Supabase migrations, Edge Functions, 
 
 ## Deployment Snapshot
 
-- Validation date: 2026-09-23
+- Validation date: 2026-09-25
 - App URL: `https://timothychristian23.github.io/ai-study-planner`
 - Supabase project: `yawmgfvdkfubazucgyec`
-- Git commit: `f07617f` (`Add course and exam progress trends`)
-- Database migrations applied: `0001_initial_schema.sql` through `0004_material_index_jobs.sql`
+- Git commit: `main` after Gemini Flash-Lite provider validation
+- Database migrations applied: `0001_initial_schema.sql` through `0005_ai_provider_embeddings.sql`
 - Edge Functions deployed:
   - `ask-materials`
   - `index-material`
   - `process-index-jobs`
   - `generate-quiz`
 - Edge Function secrets:
-  - `AI_PROVIDER`: pending Gemini update
-  - `GEMINI_API_KEY`: pending Gemini update
-  - `OPENAI_API_KEY`: configured
+  - `AI_PROVIDER`: `gemini`
+  - `GEMINI_API_KEY`: configured
+  - `GEMINI_EMBEDDING_MODEL`: `gemini-embedding-001`
+  - `GEMINI_ANSWER_MODEL`: `gemini-3.5-flash-lite`
+  - `OPENAI_API_KEY`: optional fallback only
   - `INDEX_WORKER_SECRET`: configured
 - Worker schedule: active through Supabase Cron as `ai-study-process-index-jobs` every 5 minutes
 - Smoke-test user: configured for validation; password rotated after smoke run
@@ -46,24 +48,23 @@ Result:
 - Latest authenticated notes: 38 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; the remaining warning is the optional AI fixture because a local AI provider key was not set for seeded embeddings
 - Previous public notes: 25 passed, 1 warning, 0 failed with `NODE_OPTIONS=--use-system-ca`; GitHub Pages deploy and GitHub-hosted `Supabase Smoke Tests` workflow both completed successfully
 
-## Optional AI Fixture
+## Live Gemini AI Fixture
 
-Command:
+Execution:
 
-```powershell
-$env:SUPABASE_SMOKE_RUN_AI="1"
-$env:AI_PROVIDER="gemini"
-$env:GEMINI_API_KEY="your-gemini-api-key"
-node scripts/supabase-smoke.mjs
-```
+A local one-off live smoke loaded `SUPABASE_SERVICE_ROLE_KEY` from the Supabase CLI without printing it, created a temporary confirmed auth user, uploaded a temporary material, invoked deployed `index-material`, `ask-materials`, and `generate-quiz`, then deleted the temporary rows, storage object, and auth user.
 
 Result:
 
-- Fixture embeddings: blocked by OpenAI API billing before Gemini provider support was added
-- Material Q&A: pending until Gemini credentials are configured or OpenAI credits are added
-- Quiz generation: pending until Gemini credentials are configured or OpenAI credits are added
-- Cleanup: passed; temporary AI smoke course, jobs, and storage objects were removed
-- Notes: deployed Edge Functions have `OPENAI_API_KEY` and the validation reached OpenAI; indexing failed with `credit_balance_exhausted`, meaning the API organization has no prepaid credits remaining. Gemini provider support is the free-first cloud AI path; configure `AI_PROVIDER=gemini` and `GEMINI_API_KEY`, reprocess materials so chunks get Gemini embeddings, then rerun the optional AI validation. The app degrades to browser-local source-backed Q&A and quiz cards when cloud provider credits are unavailable.
+- Temporary auth user creation and sign-in: passed
+- Private Storage upload: passed with a temporary text material
+- Deployed `index-material`: passed with Gemini embeddings and one stored chunk
+- Stored chunk metadata: passed with `embedding_provider = gemini`
+- Deployed `ask-materials`: passed with one grounded citation
+- Deployed `generate-quiz`: passed with one cloud-generated quiz card
+- Cleanup: passed; temporary course rows, storage object, and auth user were removed
+- Latest live result: 12 passed, 0 warnings, 0 failed using `GEMINI_ANSWER_MODEL=gemini-3.5-flash-lite`
+- Notes: `gemini-3.8-flash` intermittently returned provider 503 high-demand errors during quiz generation. The app now uses retry/backoff for transient AI provider statuses and defaults Gemini answers to the lighter free-first `gemini-3.5-flash-lite` model.
 
 ## Index Job Monitor
 
@@ -112,8 +113,7 @@ Result:
 
 ## Release Decision
 
-- Ready for public portfolio sharing:
-- Blockers:
-- OpenAI API credit balance is exhausted. Configure Gemini credentials and redeploy/reprocess materials, or add OpenAI credits, before validating cloud AI indexing/Q&A/quiz generation. The portfolio app remains usable through local source-backed study fallbacks.
-- Follow-up fixes:
+- Ready for public portfolio sharing: yes
+- Blockers: none from the latest production smoke run
+- Follow-up fixes: rotate Supabase keys before treating the project as production-sensitive if any service-role value was exposed in local terminal history, and run one manual browser walkthrough with the dedicated smoke account after any future UI changes
 - Rollback point:

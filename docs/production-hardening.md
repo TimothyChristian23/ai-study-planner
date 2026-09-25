@@ -34,7 +34,7 @@ Use this checklist when moving AI Study Planner from a portfolio prototype into 
   supabase secrets set AI_PROVIDER=gemini
   supabase secrets set GEMINI_API_KEY=your-gemini-api-key
   supabase secrets set GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-  supabase secrets set GEMINI_ANSWER_MODEL=gemini-3.8-flash
+  supabase secrets set GEMINI_ANSWER_MODEL=gemini-3.5-flash-lite
   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
   supabase secrets set INDEX_WORKER_SECRET=replace-with-a-long-random-secret
   ```
