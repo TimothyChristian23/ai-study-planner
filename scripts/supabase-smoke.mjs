@@ -563,10 +563,8 @@ async function createGeminiEmbeddings(inputs) {
         content: {
           parts: [{ text: input }],
         },
-        embedContentConfig: {
-          taskType: "RETRIEVAL_QUERY",
-          outputDimensionality: 1536,
-        },
+        taskType: "RETRIEVAL_QUERY",
+        outputDimensionality: 1536,
       })),
     }),
   });

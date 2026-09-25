@@ -166,10 +166,8 @@ async function createGeminiEmbeddings(inputs: string[], options: EmbeddingOption
         content: {
           parts: [{ text: input }],
         },
-        embedContentConfig: {
-          taskType: options.taskType || "SEMANTIC_SIMILARITY",
-          outputDimensionality: AI_VECTOR_DIMENSIONS,
-        },
+        taskType: options.taskType || "SEMANTIC_SIMILARITY",
+        outputDimensionality: AI_VECTOR_DIMENSIONS,
       })),
     }),
   });
