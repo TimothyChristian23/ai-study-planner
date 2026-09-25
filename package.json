@@ -1,0 +1,11 @@
+{
+  "name": "ai-study-planner",
+  "private": true,
+  "scripts": {
+    "supabase": "supabase",
+    "smoke": "node scripts/supabase-smoke.mjs"
+  },
+  "devDependencies": {
+    "supabase": "^2.117.0"
+  }
+}
