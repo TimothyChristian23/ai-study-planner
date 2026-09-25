@@ -57,7 +57,7 @@ export function getConfiguredAiProviders() {
   };
 
   if (preferredProvider) {
-    addProvider(preferredProvider);
+    return hasProviderKey(preferredProvider) ? [preferredProvider] : [];
   }
 
   addProvider("gemini");
@@ -71,6 +71,14 @@ export function hasAiProviderConfigured() {
 }
 
 export function getAiProviderConfigurationMessage() {
+  const preferredProvider = normalizeProvider(Deno.env.get("AI_PROVIDER") || "");
+
+  if (preferredProvider && !hasProviderKey(preferredProvider)) {
+    const keyName = preferredProvider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+
+    return `AI_PROVIDER is set to ${preferredProvider}; set ${keyName} in Supabase secrets to enable cloud AI.`;
+  }
+
   return "Set GEMINI_API_KEY or OPENAI_API_KEY in Supabase secrets to enable cloud AI.";
 }
 
@@ -193,7 +201,7 @@ async function withAiProviderFallback<T>(
   callback: (provider: AiProviderName) => Promise<T>,
 ): Promise<T> {
   const providers = getConfiguredAiProviders();
-  let lastError: unknown = null;
+  const providerErrors: string[] = [];
 
   if (!providers.length) {
     throw new Error(getAiProviderConfigurationMessage());
@@ -203,12 +211,13 @@ async function withAiProviderFallback<T>(
     try {
       return await callback(provider);
     } catch (error) {
-      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      providerErrors.push(`${provider}: ${message}`);
       console.error(`${operationName} failed with ${provider}.`, error);
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error(`${operationName} failed for every configured AI provider.`);
+  throw new Error(`${operationName} failed for every configured AI provider: ${providerErrors.join(" | ")}`);
 }
 
 export async function createEmbeddings(
