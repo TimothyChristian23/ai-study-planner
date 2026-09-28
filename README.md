@@ -1,6 +1,8 @@
 # AI Study Planner
 
-AI Study Planner is a portfolio app concept for turning course materials into a focused study system. Students can upload syllabi, notes, PDFs, assignments, and exam dates, then get a study schedule, quizzes, weak-topic tracking, and answers grounded in their own materials.
+AI Study Planner is a production-backed portfolio app for turning course materials into a focused study system. Students can upload syllabi, notes, PDFs, assignments, and exam dates, then get adaptive study schedules, source-backed quizzes, weak-topic tracking, and AI answers grounded in their own materials.
+
+[Live demo](https://timothychristian23.github.io/ai-study-planner/) | [Portfolio write-up](docs/portfolio-writeup.md) | [Production validation](docs/production-validation.md) | [Deployment notes](docs/deployment-smoke-setup.md)
 
 ## Live Demo
 
@@ -22,15 +24,26 @@ https://timothychristian23.github.io/ai-study-planner/
 4. Ask a question in `Ask materials` to see a grounded answer with cited source excerpts.
 5. Export the plan with `Export calendar`, `Export report`, or `Sample backup`.
 
+For the full cloud path, sign in with a Supabase test account, create a cloud course, upload a small text or PDF material, reprocess it, ask a question, and generate a quiz from the indexed chunks.
+
 ## What I Built
 
-This is a dependency-free static prototype focused on the core product workflow: local material intake, planning, practice, weak-topic tracking, retrieval-style answers, and portfolio-ready exports. It runs in the browser with `localStorage` persistence, a seeded demo state, and a Supabase-auth-ready account panel that stays disabled until configured.
+This repo contains a responsive, dependency-free frontend plus a validated Supabase backend. The browser app keeps a polished local demo path with seeded data, `localStorage` persistence, PDF/text indexing, study planning, retrieval-style answers, quizzes, exports, and mobile-friendly navigation.
 
-Full-stack work is now underway with durable file storage, server-side parsing, embeddings, and AI-generated answers over retrieved material chunks. The static demo still keeps local-first study tools so the portfolio walkthrough works without credentials or paid API credits.
+The production path adds Supabase Auth, row-level security, private Storage uploads, cloud autosave, durable material indexing jobs, vector search, and Edge Functions for Gemini/OpenAI-backed Q&A and quiz generation. Gemini Flash-Lite is configured as the free-first cloud AI provider, with local source-backed fallbacks when cloud AI is unavailable.
 
-The first production foundation is scaffolded under `supabase/`, including Postgres tables, row-level security policies, a private storage bucket, signed-in file uploads, durable server-side material indexing jobs, vector search RPC, an auth-ready browser shell, cloud course selection, cloud autosave with manual safety controls, authenticated Edge Functions that can call Gemini or OpenAI server-side, and browser fallbacks when cloud AI is unavailable.
+The live Supabase deployment has been smoke-tested end to end: temporary auth user, private material upload, Gemini indexing, grounded material Q&A, Gemini quiz generation, and cleanup all passed.
 
-## Current Prototype
+## Tech Stack
+
+- Frontend: static HTML, CSS, and JavaScript
+- Persistence: `localStorage` for demo mode, Supabase Postgres for signed-in cloud mode
+- Auth and storage: Supabase Auth, RLS policies, and private Storage buckets
+- Backend: Supabase Edge Functions for indexing, Q&A, quiz generation, and background job processing
+- AI: Gemini Flash-Lite and Gemini embeddings by default, with OpenAI support as an alternate provider
+- Validation: GitHub Pages deployment, Supabase smoke tests, index job monitor, and production validation notes
+
+## Feature Highlights
 
 This repo currently includes:
 
@@ -119,13 +132,14 @@ The smoke runner validates deployed table columns with `limit=0`, checks the sta
 - Track weak topics and recycle them into future study sessions
 - Answer student questions using only trusted class materials
 
-## Suggested Tech Direction
+## Architecture Notes
 
-- Frontend: React, Next.js, or Vite once the prototype graduates from static HTML
-- Backend: Node.js API routes or FastAPI
-- Storage: Supabase or PostgreSQL for users, courses, files, and progress
-- AI: Retrieval augmented generation over parsed class materials
-- File processing: PDF/text extraction, chunking, embeddings, and source citations
+- Static frontend keeps the public demo simple to deploy on GitHub Pages.
+- Supabase Auth and RLS isolate each user's cloud courses, materials, deadlines, sessions, quiz attempts, and answer history.
+- Private Supabase Storage keeps uploaded source files out of the public app bundle.
+- Edge Functions handle server-side indexing, chunking, embedding, material Q&A, quiz generation, and background job retries.
+- Gemini is the free-first AI provider; OpenAI can be enabled as an alternate server-side provider.
+- Local source-backed planning, quiz, and answer fallbacks keep the portfolio demo usable without cloud credentials.
 
 ## Roadmap
 

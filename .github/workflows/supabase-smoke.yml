@@ -23,6 +23,9 @@ jobs:
       SUPABASE_SMOKE_ACCESS_TOKEN: ${{ secrets.SUPABASE_SMOKE_ACCESS_TOKEN }}
       SUPABASE_SMOKE_RUN_AI: ${{ vars.SUPABASE_SMOKE_RUN_AI || 'false' }}
       AI_STUDY_APP_URL: ${{ vars.AI_STUDY_APP_URL || 'https://timothychristian23.github.io/ai-study-planner' }}
+      AI_PROVIDER: ${{ vars.AI_PROVIDER || 'gemini' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_EMBEDDING_MODEL: ${{ secrets.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_EMBEDDING_MODEL: ${{ secrets.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small' }}
     steps:
